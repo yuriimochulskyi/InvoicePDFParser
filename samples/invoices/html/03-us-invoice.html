@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice INV-10482</title>
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; margin: 40px; color: #1f2933; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b6e4f; padding-bottom: 12px; }
+  .brand { font-size: 22px; font-weight: bold; color: #0b6e4f; }
+  .title { font-size: 30px; letter-spacing: 3px; color: #9aa5b1; }
+  .meta { margin-top: 6px; text-align: right; }
+  .addr { display: flex; gap: 60px; margin: 24px 0; }
+  .addr h4 { margin: 0 0 4px; font-size: 11px; color: #0b6e4f; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #0b6e4f; color: #fff; padding: 7px; text-align: left; }
+  td { padding: 7px; border-bottom: 1px solid #e4e7eb; }
+  .r { text-align: right; }
+  .totals { width: 40%; margin: 14px 0 0 auto; }
+  .totals td { border: none; padding: 4px 7px; }
+  .due td { font-size: 15px; font-weight: bold; background: #f0f4f8; }
+  .terms { margin-top: 30px; color: #52606d; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <div class="brand">Brightline Supply Co.</div>
+      1450 Market Street, Suite 300<br>
+      Denver, CO 80202<br>
+      EIN: 84-3920175
+    </div>
+    <div>
+      <div class="title">INVOICE</div>
+      <div class="meta">
+        Invoice #: INV-10482<br>
+        Date: September 12, 2026<br>
+        Due Date: October 12, 2026<br>
+        PO #: 7781-B
+      </div>
+    </div>
+  </div>
+
+  <div class="addr">
+    <div><h4>Bill To</h4>Harper &amp; Lane Architects LLC<br>Attn: Accounts Payable<br>220 W 5th Ave<br>Portland, OR 97209</div>
+    <div><h4>Ship To</h4>Harper &amp; Lane Architects LLC<br>Studio 2<br>88 Ocean View Blvd<br>San Diego, CA 92101</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr></thead>
+    <tr><td>Ergonomic Office Chair</td><td class="r">4</td><td class="r">$289.00</td><td class="r">$1,156.00</td></tr>
+    <tr><td>Standing Desk Frame</td><td class="r">2</td><td class="r">$415.50</td><td class="r">$831.00</td></tr>
+    <tr><td>Monitor Arm, Dual</td><td class="r">4</td><td class="r">$74.99</td><td class="r">$299.96</td></tr>
+  </table>
+
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="r">$2,286.96</td></tr>
+    <tr><td>Sales Tax (8.875%)</td><td class="r">$202.97</td></tr>
+    <tr class="due"><td>Balance Due</td><td class="r">$2,489.93</td></tr>
+  </table>
+
+  <div class="terms">Terms: Net 30. Please make checks payable to Brightline Supply Co. Thank you for your business!</div>
+</body>
+</html>

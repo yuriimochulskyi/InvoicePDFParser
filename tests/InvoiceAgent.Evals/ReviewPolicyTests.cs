@@ -20,7 +20,7 @@ public class ReviewPolicyTests
     };
 
     private static ExtractionRun Run(InvoiceDto? invoice, params string[] tools) =>
-        new(invoice, "raw text", null, "Ollama", "qwen3:8b", 0, 0, 0, tools.Length > 0 ? tools : ["ExtractPdfText"], null);
+        new(invoice, "Nettobetrag 1.309,90 € MwSt. 19 % 248,88 € Rechnungsbetrag 1.558,78 €", null, "Ollama", "qwen3:8b", 0, 0, 0, tools.Length > 0 ? tools : ["ExtractPdfText"], null);
 
     [Fact]
     public void ValidInvoice_IsParsed()
@@ -85,10 +85,49 @@ public class ReviewPolicyTests
     }
 
     [Fact]
+    public void LineWhereQuantityTimesPriceIsWrong_Fails()
+    {
+        // Real case: PdfPig renders "8 500,00" and the model read only "500".
+        var invoice = Valid() with { LineItems = [new() { Description = "Logo", Quantity = 1, UnitPrice = 500m, Amount = 1309.90m }] };
+        var check = TotalsValidator.Validate(invoice);
+        Assert.False(check.Ok);
+        Assert.Contains("line 1", check.Details);
+    }
+
+    [Theory]
+    [InlineData("Всього з ПДВ: 16 440,00", 16440.00)]
+    [InlineData("Rechnungsbetrag 1.558,78 €", 1558.78)]
+    [InlineData("Balance Due $2,489.93", 2489.93)]
+    [InlineData("Rabat 5% -38,75", 38.75)]
+    [InlineData("TOTAL CHF 18.50", 18.50)]
+    public void Grounding_FindsAmountsInAnyLocaleFormat(string text, decimal total)
+    {
+        Assert.Empty(AmountGrounding.UngroundedFields(new InvoiceDto { Total = total }, text));
+    }
+
+    [Fact]
+    public void Grounding_FlagsInventedAmounts()
+    {
+        // Real case: a receipt that shows only a total; the model added subtotal, tax 0.00 and discount 0.00.
+        const string receipt = "Café Lumen Seefeldstrasse 45, 8008 Zürich QUITTUNG Nr. 4471 21.09.2026 14:32 TOTAL CHF 18.50";
+        var invented = new InvoiceDto { Subtotal = 18.50m, TaxAmount = 0m, DiscountAmount = 0m, Total = 18.50m };
+        Assert.Equal(["taxAmount 0.00", "discountAmount 0.00"], AmountGrounding.UngroundedFields(invented, receipt));
+    }
+
+    [Fact]
+    public void ValidateTotalsTool_StopsAfterThreeChecks()
+    {
+        var tools = new InvoiceTools(null!);
+        for (var i = 0; i < 3; i++)
+            Assert.StartsWith("mismatch", tools.ValidateTotals([new(1, 10, 10)], null, 2, null, 13));
+        Assert.StartsWith("Check budget exhausted", tools.ValidateTotals([new(1, 10, 10)], null, 2, null, 13));
+    }
+
+    [Fact]
     public void ValidateTotalsTool_ReportsMismatch()
     {
         var tools = new InvoiceTools(null!);
-        var result = tools.ValidateTotals("""{"lineItems":[{"amount":10}],"taxAmount":2,"total":13}""");
+        var result = tools.ValidateTotals([new(1, 10, 10)], subtotal: null, taxAmount: 2, discountAmount: null, total: 13);
         Assert.StartsWith("mismatch", result);
         Assert.Equal(["ValidateTotals"], tools.Calls);
     }

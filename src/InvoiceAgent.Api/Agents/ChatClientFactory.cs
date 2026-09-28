@@ -10,11 +10,15 @@ namespace InvoiceAgent.Api.Agents;
 /// </summary>
 public static class ChatClientFactory
 {
-    public sealed record ModelInfo(string Provider, string Model);
+    public sealed record ModelInfo(string Provider, string Model)
+    {
+        public TimeSpan RunTimeout { get; init; } = TimeSpan.FromMinutes(5);
+    }
 
     public static (ChatClient Client, ModelInfo Info) Create(AiOptions options)
     {
-        var clientOptions = new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(5) };
+        var runTimeout = TimeSpan.FromSeconds(options.RunTimeoutSeconds);
+        var clientOptions = new OpenAIClientOptions { NetworkTimeout = runTimeout };
 
         switch (options.Provider)
         {
@@ -22,7 +26,7 @@ public static class ChatClientFactory
                 clientOptions.Endpoint = new Uri(options.Ollama.Endpoint.TrimEnd('/') + "/v1");
                 // Ollama ignores the key, but the client requires one.
                 var ollama = new OpenAIClient(new ApiKeyCredential("ollama"), clientOptions);
-                return (ollama.GetChatClient(options.Ollama.Model), new("Ollama", options.Ollama.Model));
+                return (ollama.GetChatClient(options.Ollama.Model), new("Ollama", options.Ollama.Model) { RunTimeout = runTimeout });
 
             case "AzureOpenAI":
                 var az = options.AzureOpenAI;
@@ -34,7 +38,7 @@ public static class ChatClientFactory
                     endpoint += "/openai/v1";
                 clientOptions.Endpoint = new Uri(endpoint + "/");
                 var azure = new OpenAIClient(new ApiKeyCredential(az.ApiKey), clientOptions);
-                return (azure.GetChatClient(az.Deployment), new("AzureOpenAI", az.Deployment));
+                return (azure.GetChatClient(az.Deployment), new("AzureOpenAI", az.Deployment) { RunTimeout = runTimeout });
 
             default:
                 throw new InvalidOperationException($"Unknown Ai:Provider '{options.Provider}'. Use 'Ollama' or 'AzureOpenAI'.");

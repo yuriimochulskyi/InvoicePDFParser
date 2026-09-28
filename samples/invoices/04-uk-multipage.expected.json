@@ -1,0 +1,32 @@
+{
+  "vendorName": "Northgate Components Ltd",
+  "vendorTaxId": "GB293847561",
+  "invoiceNumber": "NG-2026-0931",
+  "invoiceDate": "2026-09-05",
+  "dueDate": "2026-10-05",
+  "currency": "GBP",
+  "lineItems": [
+    { "description": "USB-C Docking Station", "quantity": 10, "unitPrice": 89.50, "amount": 895.00 },
+    { "description": "27\" IPS Monitor", "quantity": 6, "unitPrice": 179.00, "amount": 1074.00 },
+    { "description": "Wireless Keyboard", "quantity": 15, "unitPrice": 24.99, "amount": 374.85 },
+    { "description": "Wireless Mouse", "quantity": 15, "unitPrice": 14.50, "amount": 217.50 },
+    { "description": "HDMI Cable 2m", "quantity": 30, "unitPrice": 4.20, "amount": 126.00 },
+    { "description": "Cat6 Patch Cable 1m", "quantity": 50, "unitPrice": 1.85, "amount": 92.50 },
+    { "description": "1TB NVMe SSD", "quantity": 8, "unitPrice": 62.00, "amount": 496.00 },
+    { "description": "16GB DDR5 RAM Module", "quantity": 12, "unitPrice": 41.75, "amount": 501.00 },
+    { "description": "Aluminium Laptop Stand", "quantity": 10, "unitPrice": 19.90, "amount": 199.00 },
+    { "description": "Webcam 1080p", "quantity": 8, "unitPrice": 34.00, "amount": 272.00 },
+    { "description": "Noise-Cancelling Headset", "quantity": 6, "unitPrice": 72.50, "amount": 435.00 },
+    { "description": "Surge Protector 6-Way", "quantity": 12, "unitPrice": 11.25, "amount": 135.00 },
+    { "description": "External HDD 4TB", "quantity": 4, "unitPrice": 88.00, "amount": 352.00 },
+    { "description": "USB Flash Drive 64GB", "quantity": 25, "unitPrice": 5.60, "amount": 140.00 },
+    { "description": "Network Switch 8-Port", "quantity": 3, "unitPrice": 46.00, "amount": 138.00 },
+    { "description": "Wi-Fi 6 Access Point", "quantity": 2, "unitPrice": 119.00, "amount": 238.00 },
+    { "description": "Cable Management Kit", "quantity": 10, "unitPrice": 7.80, "amount": 78.00 },
+    { "description": "Screen Cleaning Kit", "quantity": 20, "unitPrice": 3.15, "amount": 63.00 }
+  ],
+  "subtotal": 5826.85,
+  "taxAmount": 1165.37,
+  "discountAmount": null,
+  "total": 6992.22
+}

@@ -1,0 +1,13 @@
+{
+  "vendorName": "Café Lumen",
+  "vendorTaxId": null,
+  "invoiceNumber": "4471",
+  "invoiceDate": "2026-09-21",
+  "dueDate": null,
+  "currency": "CHF",
+  "lineItems": [],
+  "subtotal": null,
+  "taxAmount": null,
+  "discountAmount": null,
+  "total": 18.50
+}

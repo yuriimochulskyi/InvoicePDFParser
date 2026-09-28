@@ -1,0 +1,18 @@
+{
+  "vendorName": "Drukarnia Nowak Sp. z o.o.",
+  "vendorTaxId": "5272841936",
+  "invoiceNumber": "FV/2026/09/118",
+  "invoiceDate": "2026-09-18",
+  "dueDate": "2026-10-02",
+  "currency": "PLN",
+  "lineItems": [
+    { "description": "Ulotki A5, druk dwustronny", "quantity": 1000, "unitPrice": 0.32, "amount": 320.00 },
+    { "description": "Plakaty A2", "quantity": 50, "unitPrice": 6.80, "amount": 340.00 },
+    { "description": "Wizytówki", "quantity": 500, "unitPrice": 0.18, "amount": 90.00 },
+    { "description": "Wysyłka kurierska", "quantity": 1, "unitPrice": 25.00, "amount": 25.00 }
+  ],
+  "subtotal": 775.00,
+  "taxAmount": 169.34,
+  "discountAmount": 38.75,
+  "total": 905.59
+}

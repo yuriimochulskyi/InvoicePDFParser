@@ -32,6 +32,10 @@ public static partial class InvoiceReviewPolicy
         if (invoice.Currency is { } c && !CurrencyCode().IsMatch(c))
             problems.Add($"currency '{c}' is not an ISO 4217 code");
 
+        var ungrounded = AmountGrounding.UngroundedFields(invoice, run.RawText);
+        if (ungrounded.Count > 0)
+            problems.Add("amounts not found in the document text: " + string.Join(", ", ungrounded));
+
         var totals = TotalsValidator.Validate(invoice);
         if (!totals.Ok)
             problems.Add("totals check failed: " + totals.Details);

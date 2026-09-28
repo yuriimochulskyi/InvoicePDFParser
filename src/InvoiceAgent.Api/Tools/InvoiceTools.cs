@@ -1,54 +1,74 @@
 using System.ComponentModel;
-using System.Text.Json;
 using InvoiceAgent.Api.Models;
 using Microsoft.Extensions.AI;
 
 namespace InvoiceAgent.Api.Tools;
 
+public sealed record TotalsLine(decimal? Quantity, decimal? UnitPrice, decimal? Amount);
+
 /// <summary>
 /// Tools exposed to the agent. One instance per agent run, so it can record
 /// which tools were called and keep the raw text for persistence.
 /// </summary>
-public sealed class InvoiceTools(PdfTextExtractor pdf)
+public sealed class InvoiceTools(PdfTextExtractor pdf, ILogger? logger = null)
 {
+    private const int MaxValidations = 3;
     private readonly List<string> _calls = [];
 
     public IReadOnlyList<string> Calls => _calls;
     public string? ExtractedText { get; private set; }
 
-    [Description("Extracts the plain text of an uploaded PDF invoice. Call this first.")]
+    [Description("Extracts the plain text of an uploaded PDF invoice. Table columns are separated by ' | '. Call this first.")]
     public string ExtractPdfText([Description("The fileId of the uploaded PDF")] string fileId)
     {
         _calls.Add(nameof(ExtractPdfText));
         try
         {
             ExtractedText = pdf.Extract(fileId);
+            logger?.LogInformation("Tool ExtractPdfText -> {Chars} chars", ExtractedText.Length);
             return ExtractedText;
         }
         catch (Exception ex) when (ex is ArgumentException or FileNotFoundException)
         {
-            return $"ERROR: {ex.Message}";
+            logger?.LogWarning("Tool ExtractPdfText -> {Error}", ex.Message);
+            return $"ERROR: {ex.Message} Use exactly the fileId given in the request.";
         }
     }
 
-    [Description("Checks the arithmetic of a drafted invoice: sum(lineItems.amount) + taxAmount - discountAmount must equal total. Returns ok or mismatch with details.")]
-    public string ValidateTotals([Description("The drafted invoice as JSON with the invoice fields (lineItems, subtotal, taxAmount, discountAmount, total)")] string invoiceJson)
+    // Typed, numbers-only parameters rather than one invoiceJson string: the framework
+    // turns them into a JSON schema for the tool call, so the model sees the exact field
+    // names, and there are no free-text strings to break with an unescaped quote
+    // (a 27" monitor made qwen3 send the same broken JSON three times in a row).
+    [Description("Checks the arithmetic of the drafted invoice: quantity × unitPrice = amount for each line, sum of line amounts = subtotal, and sum + taxAmount - discountAmount = total. Returns ok or mismatch with details.")]
+    public string ValidateTotals(
+        [Description("Every line item, in document order")] TotalsLine[] lineItems,
+        [Description("Subtotal as printed, or null")] decimal? subtotal,
+        [Description("Tax amount as printed, or null")] decimal? taxAmount,
+        [Description("Discount as a positive number, or null")] decimal? discountAmount,
+        [Description("Grand total as printed")] decimal? total)
     {
         _calls.Add(nameof(ValidateTotals));
-        InvoiceDto? invoice;
-        try
+        // Loop breaker: a small model can keep "fixing" forever. The final status is decided
+        // by the review policy anyway, so after a few attempts just let the agent answer.
+        if (_calls.Count(c => c == nameof(ValidateTotals)) > MaxValidations)
         {
-            invoice = JsonSerializer.Deserialize<InvoiceDto>(invoiceJson, JsonSerializerOptions.Web);
+            logger?.LogWarning("Tool ValidateTotals -> budget of {Max} checks exhausted", MaxValidations);
+            return "Check budget exhausted. Stop calling tools and reply \"done\"; keep the values exactly as printed in the document.";
         }
-        catch (JsonException ex)
+
+        var invoice = new InvoiceDto
         {
-            return $"ERROR: invoiceJson is not valid JSON: {ex.Message}";
-        }
-        if (invoice is null)
-            return "ERROR: invoiceJson is empty";
+            LineItems = (lineItems ?? []).Select(l => new LineItemDto { Quantity = l.Quantity, UnitPrice = l.UnitPrice, Amount = l.Amount }).ToList(),
+            Subtotal = subtotal,
+            TaxAmount = taxAmount,
+            DiscountAmount = discountAmount,
+            Total = total,
+        };
 
         var check = TotalsValidator.Validate(invoice);
-        return (check.Ok ? "ok: " : "mismatch: ") + check.Details;
+        var result = (check.Ok ? "ok: " : "mismatch: ") + check.Details;
+        logger?.LogInformation("Tool ValidateTotals -> {Result}", result);
+        return result;
     }
 
     public IList<AITool> AsAITools() =>

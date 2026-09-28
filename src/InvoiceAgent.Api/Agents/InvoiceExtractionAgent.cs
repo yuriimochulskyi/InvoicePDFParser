@@ -24,7 +24,8 @@ public sealed record ExtractionRun(
 public sealed class InvoiceExtractionAgent(
     ChatClient chatClient,
     ChatClientFactory.ModelInfo model,
-    PdfTextExtractor pdf)
+    PdfTextExtractor pdf,
+    ILogger<InvoiceExtractionAgent> logger)
 {
     public const string SystemInstructions = "You extract structured data from invoices of any layout and language.";
 
@@ -38,14 +39,16 @@ public sealed class InvoiceExtractionAgent(
         - discountAmount is a positive number, or null if the document shows no discount (not 0).
           Same for taxAmount, subtotal and dueDate: null when absent. Shipping/delivery charges are line items.
         - lineItems is an empty array if the document has no itemised lines.
+        - invoiceNumber is only the identifier, without labels such as "Nr.", "No.", "№", "#" or "Invoice".
         - After drafting, call ValidateTotals. On a mismatch, re-read the text and fix misread numbers.
           Never change numbers just to make the check pass: if the document itself does not add up, keep its values.
         """;
 
     public async Task<ExtractionRun> RunAsync(string fileId, CancellationToken ct = default)
     {
+        var callerCt = ct;
         // Tools are created per run so we can see exactly what this run called.
-        var tools = new InvoiceTools(pdf);
+        var tools = new InvoiceTools(pdf, logger);
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {
             Name = "InvoiceExtractor",
@@ -54,6 +57,8 @@ public sealed class InvoiceExtractionAgent(
                 Instructions = SystemInstructions + Rules,
                 Tools = tools.AsAITools(),
                 Temperature = 0,
+                // A runaway generation (e.g. after a context overflow) must fail fast, not loop for minutes.
+                MaxOutputTokens = 4096,
                 // qwen3 "thinks" by default: ~8x the tokens and latency for no accuracy gain on extraction.
                 Reasoning = model.Provider == "Ollama" ? new ReasoningOptions { Effort = ReasoningEffort.None } : null,
             },
@@ -63,6 +68,9 @@ public sealed class InvoiceExtractionAgent(
         InvoiceDto? invoice = null;
         string? rawJson = null, error = null;
         long inTokens = 0, outTokens = 0;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(model.RunTimeout);
+        ct = timeout.Token;
         try
         {
             // Two turns in one session. A JSON-schema response format constrains every
@@ -73,7 +81,8 @@ public sealed class InvoiceExtractionAgent(
 
             AgentResponse work = await agent.RunAsync(
                 $"Extract the invoice from the uploaded PDF with fileId \"{fileId}\". " +
-                "Read it with ExtractPdfText, draft the invoice as JSON, check it with ValidateTotals, and fix misreads.",
+                "Read it with ExtractPdfText, then pass the amounts you read to ValidateTotals and fix misreads. " +
+                "Do not write out the invoice in your reply; when the check is done, reply only with \"done\".",
                 session, cancellationToken: ct);
             AddUsage(work);
 
@@ -88,6 +97,10 @@ public sealed class InvoiceExtractionAgent(
         catch (JsonException ex)
         {
             error = $"Model returned invalid JSON: {ex.Message}";
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !callerCt.IsCancellationRequested)
+        {
+            error = $"Agent run timed out after {model.RunTimeout.TotalSeconds:0} s (slow model or a very long document).";
         }
         sw.Stop();
 

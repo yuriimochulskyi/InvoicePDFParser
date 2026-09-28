@@ -29,6 +29,12 @@ public static class TotalsValidator
                 return new(false, "one or more line items have no amount");
 
             baseAmount = invoice.LineItems.Sum(l => l.Amount!.Value);
+
+            for (var i = 0; i < invoice.LineItems.Count; i++)
+                if (invoice.LineItems[i] is { Quantity: { } qty, UnitPrice: { } unit, Amount: { } amount }
+                    && Math.Abs(Math.Round(qty * unit, 2) - amount) > Tolerance)
+                    problems.Add(Inv($"line {i + 1} '{invoice.LineItems[i].Description}': quantity {qty} × unitPrice {unit:0.00} = {qty * unit:0.00}, but amount is {amount:0.00}"));
+
             if (invoice.Subtotal is { } subtotal && Math.Abs(subtotal - baseAmount) > Tolerance)
                 problems.Add(Inv($"sum of line items {baseAmount:0.00} != subtotal {subtotal:0.00}"));
         }

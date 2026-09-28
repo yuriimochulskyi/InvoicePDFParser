@@ -1,0 +1,17 @@
+{
+  "vendorName": "Brightline Supply Co.",
+  "vendorTaxId": "84-3920175",
+  "invoiceNumber": "INV-10482",
+  "invoiceDate": "2026-09-12",
+  "dueDate": "2026-10-12",
+  "currency": "USD",
+  "lineItems": [
+    { "description": "Ergonomic Office Chair", "quantity": 4, "unitPrice": 289.00, "amount": 1156.00 },
+    { "description": "Standing Desk Frame", "quantity": 2, "unitPrice": 415.50, "amount": 831.00 },
+    { "description": "Monitor Arm, Dual", "quantity": 4, "unitPrice": 74.99, "amount": 299.96 }
+  ],
+  "subtotal": 2286.96,
+  "taxAmount": 202.97,
+  "discountAmount": null,
+  "total": 2489.93
+}
