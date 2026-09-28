@@ -94,7 +94,7 @@ public class ExtractionEvals
     private static async Task SkipUnlessOllamaReadyAsync(AiOptions.OllamaOptions ollama, CancellationToken ct)
     {
         const string Help = "Install and start Ollama, then run:\n  ollama pull {0}\n" +
-                            "and set OLLAMA_CONTEXT_LENGTH=12288 before starting Ollama (see README).";
+                            "and set OLLAMA_CONTEXT_LENGTH=8192 before starting Ollama (see README).";
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         string tags;
         try
