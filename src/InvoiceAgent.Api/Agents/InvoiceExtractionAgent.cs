@@ -24,8 +24,7 @@ public sealed record ExtractionRun(
 public sealed class InvoiceExtractionAgent(
     ChatClient chatClient,
     ChatClientFactory.ModelInfo model,
-    PdfTextExtractor pdf,
-    ILogger<InvoiceExtractionAgent> logger)
+    PdfTextExtractor pdf)
 {
     public const string SystemInstructions = "You extract structured data from invoices of any layout and language.";
 
@@ -34,10 +33,13 @@ public sealed class InvoiceExtractionAgent(
         Rules:
         - Always call ExtractPdfText with the given fileId first; work only from the text it returns.
         - If a value is not present in the document, return null. Never invent or guess values.
-        - Dates must be yyyy-MM-dd. Currency must be an ISO 4217 code (e.g. "â‚´"/"Ð³Ñ€Ð½" â†’ UAH, "â‚¬" â†’ EUR, "$" â†’ USD).
+        - Dates must be yyyy-MM-dd. Currency must be an ISO 4217 code (e.g. "₴"/"грн" → UAH, "€" → EUR, "$" → USD).
         - Amounts are plain numbers without currency symbols or thousands separators.
-        - discountAmount is a positive number. Shipping/delivery charges are line items.
+        - discountAmount is a positive number, or null if the document shows no discount (not 0).
+          Same for taxAmount, subtotal and dueDate: null when absent. Shipping/delivery charges are line items.
         - lineItems is an empty array if the document has no itemised lines.
+        - After drafting, call ValidateTotals. On a mismatch, re-read the text and fix misread numbers.
+          Never change numbers just to make the check pass: if the document itself does not add up, keep its values.
         """;
 
     public async Task<ExtractionRun> RunAsync(string fileId, CancellationToken ct = default)
@@ -71,12 +73,12 @@ public sealed class InvoiceExtractionAgent(
 
             AgentResponse work = await agent.RunAsync(
                 $"Extract the invoice from the uploaded PDF with fileId \"{fileId}\". " +
-                "Read it with the tools, then list every invoice field and line item you found.",
+                "Read it with ExtractPdfText, draft the invoice as JSON, check it with ValidateTotals, and fix misreads.",
                 session, cancellationToken: ct);
             AddUsage(work);
 
             AgentResponse<InvoiceDto> final = await agent.RunAsync<InvoiceDto>(
-                "Now return the extracted invoice as JSON matching the schema. Use null for anything not in the document.",
+                "Now return the final extracted invoice as JSON matching the schema. Use null for anything not in the document.",
                 session, cancellationToken: ct);
             AddUsage(final);
 
@@ -89,19 +91,13 @@ public sealed class InvoiceExtractionAgent(
         }
         sw.Stop();
 
+        return new ExtractionRun(invoice, tools.ExtractedText, rawJson, model.Provider, model.Model,
+            inTokens, outTokens, sw.ElapsedMilliseconds, tools.Calls, error);
+
         void AddUsage(AgentResponse r)
         {
             inTokens += r.Usage?.InputTokenCount ?? 0;
             outTokens += r.Usage?.OutputTokenCount ?? 0;
         }
-
-        var run = new ExtractionRun(invoice, tools.ExtractedText, rawJson, model.Provider, model.Model,
-            inTokens, outTokens, sw.ElapsedMilliseconds, tools.Calls, error);
-
-        logger.LogInformation(
-            "Agent run {Provider}/{Model}: tokens in={InputTokens} out={OutputTokens}, latency={LatencyMs} ms, tools=[{ToolCalls}], error={Error}",
-            run.Provider, run.Model, run.InputTokens, run.OutputTokens, run.LatencyMs, string.Join(", ", run.ToolCalls), run.Error);
-
-        return run;
     }
 }
