@@ -5,6 +5,7 @@ using InvoiceAgent.Api.Data;
 using InvoiceAgent.Api.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace InvoiceAgent.Evals;
@@ -26,20 +27,20 @@ public class ExtractionEvals
         if (options.Provider == "Ollama")
             await SkipUnlessOllamaReadyAsync(options.Ollama, ct);
 
-        var (chatClient, model) = ChatClientFactory.Create(options);
         var workDir = Path.Combine(Path.GetTempPath(), "invoice-agent-evals", Guid.NewGuid().ToString("N"));
-        var store = new PdfFileStore(Path.Combine(workDir, "uploads"));
-        using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole().SetMinimumLevel(LogLevel.Information));
-        await using var db = new InvoiceDbContext(new DbContextOptionsBuilder<InvoiceDbContext>()
-            .UseSqlite($"Data Source={Path.Combine(workDir, "evals.db")}").Options);
         Directory.CreateDirectory(workDir);
-        await db.Database.EnsureCreatedAsync(ct);
 
-        var service = new InvoiceProcessingService(
-            store,
-            new InvoiceExtractionAgent(chatClient, model, new PdfTextExtractor(store), loggerFactory.CreateLogger<InvoiceExtractionAgent>()),
-            db,
-            loggerFactory.CreateLogger<InvoiceProcessingService>());
+        // Same registration as the API (AddInvoiceAgent), with a throwaway database.
+        await using var provider = new ServiceCollection()
+            .AddLogging(b => b.AddSimpleConsole().SetMinimumLevel(LogLevel.Information))
+            .AddInvoiceAgent(options, Path.Combine(workDir, "uploads"))
+            .AddDbContext<InvoiceDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(workDir, "evals.db")}"))
+            .BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<InvoiceDbContext>();
+        await db.Database.EnsureCreatedAsync(ct);
+        var service = scope.ServiceProvider.GetRequiredService<InvoiceProcessingService>();
+        var model = scope.ServiceProvider.GetRequiredService<ChatClientFactory.ModelInfo>();
 
         var rows = new List<(string File, string Status, string? Reason, FieldScore Score, long LatencyMs)>();
         foreach (var sample in Samples.All())

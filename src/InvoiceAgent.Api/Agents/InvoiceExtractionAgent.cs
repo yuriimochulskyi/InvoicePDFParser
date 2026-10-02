@@ -24,6 +24,7 @@ public sealed record ExtractionRun(
 public sealed class InvoiceExtractionAgent(
     ChatClient chatClient,
     ChatClientFactory.ModelInfo model,
+    AiOptions options,
     PdfTextExtractor pdf,
     ILogger<InvoiceExtractionAgent> logger)
 {
@@ -47,6 +48,7 @@ public sealed class InvoiceExtractionAgent(
     public async Task<ExtractionRun> RunAsync(string fileId, CancellationToken ct = default)
     {
         var callerCt = ct;
+        var runTimeout = TimeSpan.FromSeconds(options.RunTimeoutSeconds);
         // Tools are created per run so we can see exactly what this run called.
         var tools = new InvoiceTools(pdf, logger);
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
@@ -69,7 +71,7 @@ public sealed class InvoiceExtractionAgent(
         string? rawJson = null, error = null;
         long inTokens = 0, outTokens = 0;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(model.RunTimeout);
+        timeout.CancelAfter(runTimeout);
         ct = timeout.Token;
         try
         {
@@ -100,7 +102,12 @@ public sealed class InvoiceExtractionAgent(
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !callerCt.IsCancellationRequested)
         {
-            error = $"Agent run timed out after {model.RunTimeout.TotalSeconds:0} s (slow model or a very long document).";
+            error = $"Agent run timed out after {runTimeout.TotalSeconds:0} s (slow model or a very long document).";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Endpoint down, bad key, quota: an infrastructure failure, not a document that needs review.
+            throw new LlmUnavailableException(model.Provider, model.Model, ex);
         }
         sw.Stop();
 

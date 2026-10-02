@@ -1,7 +1,6 @@
 using InvoiceAgent.Api.Agents;
 using System.Text.Json.Serialization;
 using InvoiceAgent.Api.Data;
-using InvoiceAgent.Api.Tools;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -13,13 +12,7 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
     .WriteTo.File("logs/invoice-agent-.log", rollingInterval: RollingInterval.Day));
 
 var aiOptions = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new();
-var (chatClient, modelInfo) = ChatClientFactory.Create(aiOptions);
-builder.Services.AddSingleton(chatClient);
-builder.Services.AddSingleton(modelInfo);
-builder.Services.AddSingleton(new PdfFileStore(Path.Combine(builder.Environment.ContentRootPath, "uploads")));
-builder.Services.AddSingleton<PdfTextExtractor>();
-builder.Services.AddScoped<InvoiceExtractionAgent>();
-builder.Services.AddScoped<InvoiceProcessingService>();
+builder.Services.AddInvoiceAgent(aiOptions, Path.Combine(builder.Environment.ContentRootPath, "uploads"));
 builder.Services.AddDbContext<InvoiceDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("Invoices")));
 
 builder.Services.AddControllers()

@@ -12,17 +12,34 @@ public sealed class InvoicesController(InvoiceProcessingService processing, Invo
 {
     [HttpPost]
     [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxPdfBytes + 64 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxPdfBytes + 64 * 1024)]
     public async Task<ActionResult<ProcessingResult>> Upload(IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return BadRequest("Upload one PDF file in the 'file' form field.");
-        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            return BadRequest("Only PDF files are supported.");
+        if (file.Length > MaxPdfBytes)
+            return BadRequest($"The file is larger than {MaxPdfBytes / (1024 * 1024)} MB.");
 
         await using var stream = file.OpenReadStream();
-        var result = await processing.ProcessAsync(stream, file.FileName, ct);
-        return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        var header = new byte[5];
+        if (await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct) < header.Length
+            || !header.AsSpan().SequenceEqual("%PDF-"u8))
+            return BadRequest("Only PDF files are supported.");
+        stream.Position = 0;
+
+        try
+        {
+            var result = await processing.ProcessAsync(stream, file.FileName, ct);
+            return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        }
+        catch (LlmUnavailableException ex)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable, title: "LLM provider unavailable");
+        }
     }
+
+    private const long MaxPdfBytes = 10 * 1024 * 1024;
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
