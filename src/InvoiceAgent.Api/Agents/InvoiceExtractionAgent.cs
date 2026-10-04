@@ -65,11 +65,11 @@ public sealed class InvoiceExtractionAgent(
             {
                 Instructions = SystemInstructions + Rules,
                 Tools = tools.AsAITools(),
-                Temperature = 0,
+                // Per-provider data, not code: reasoning models reject temperature, qwen3 needs reasoning off.
+                Temperature = options.Generation.Temperature,
+                Reasoning = options.Generation.ReasoningEffort is { } effort ? new ReasoningOptions { Effort = effort } : null,
                 // A runaway generation (e.g. after a context overflow) must fail fast, not loop for minutes.
                 MaxOutputTokens = 4096,
-                // qwen3 "thinks" by default: ~8x the tokens and latency for no accuracy gain on extraction.
-                Reasoning = model.Provider == "Ollama" ? new ReasoningOptions { Effort = ReasoningEffort.None } : null,
             },
         }, loggerFactory);
 
@@ -118,9 +118,16 @@ public sealed class InvoiceExtractionAgent(
         {
             error = $"Agent run timed out after {runTimeout.TotalSeconds:0} s (slow model or a very long document).";
         }
+        catch (Exception ex) when (IsClientError(ex))
+        {
+            // 400/401/404 from the provider: our request or configuration is wrong (unsupported
+            // parameter for this model, bad key, unknown deployment). A bug, not an outage: let it
+            // surface as 500 with the provider's message instead of hiding behind 503.
+            throw new InvalidOperationException($"{model.Provider} ({model.Model}) rejected the request: {ex.Message}", ex);
+        }
         catch (Exception ex) when (IsTransportFailure(ex))
         {
-            // Endpoint down, bad key, quota: an infrastructure failure, not a document that needs review.
+            // Endpoint down, quota, 5xx: an infrastructure failure, not a document that needs review.
             throw new LlmUnavailableException(model.Provider, model.Model, ex);
         }
         sw.Stop();
@@ -134,6 +141,9 @@ public sealed class InvoiceExtractionAgent(
             outTokens += r.Usage?.OutputTokenCount ?? 0;
         }
     }
+
+    private static bool IsClientError(Exception ex) =>
+        ex is ClientResultException { Status: >= 400 and < 500 and not 408 and not 429 };
 
     /// <summary>The OpenAI client retries and then wraps the failures in an AggregateException.</summary>
     private static bool IsTransportFailure(Exception ex) => ex switch

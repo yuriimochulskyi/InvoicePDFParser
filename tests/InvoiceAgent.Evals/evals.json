@@ -1,0 +1,34 @@
+{
+  "_comment": "Models the eval compares. Endpoint and key come from the API's appsettings + user-secrets; prices are USD per 1M tokens, copied from the provider's pricing page on PricesAsOf (never from memory). A model with no price shows cost as n/a.",
+  "Models": [
+    {
+      "Provider": "Ollama",
+      "Model": "qwen3:8b",
+      "Temperature": 0,
+      "ReasoningEffort": "None",
+      "InputPricePerM": 0,
+      "OutputPricePerM": 0,
+      "PricingNote": "local, RTX 3060 Ti 8 GB; $0 marginal, pays in latency"
+    },
+    {
+      "Provider": "AzureOpenAI",
+      "Model": "gpt-4.1-mini",
+      "Temperature": 0,
+      "ReasoningEffort": null,
+      "InputPricePerM": null,
+      "OutputPricePerM": null,
+      "PricingNote": null
+    },
+    {
+      "Provider": "AzureOpenAI",
+      "Model": "gpt-5-mini",
+      "Temperature": null,
+      "ReasoningEffort": "Low",
+      "InputPricePerM": null,
+      "OutputPricePerM": null,
+      "PricingNote": "reasoning model: rejects temperature; reasoning tokens are billed as output"
+    }
+  ],
+  "PricesAsOf": null,
+  "PricingSource": "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
+}
