@@ -1,17 +1,40 @@
 {
-  "vendorName": "ФОП Коваленко Олена Петрівна",
-  "vendorTaxId": "3124509876",
-  "invoiceNumber": "57",
-  "invoiceDate": "2026-09-03",
-  "dueDate": "2026-09-10",
-  "currency": "UAH",
-  "lineItems": [
-    { "description": "Розробка логотипу", "quantity": 1, "unitPrice": 8500.00, "amount": 8500.00 },
-    { "description": "Дизайн візитних карток", "quantity": 2, "unitPrice": 1250.00, "amount": 2500.00 },
-    { "description": "Консультація з брендингу", "quantity": 3, "unitPrice": 900.00, "amount": 2700.00 }
+  "expectedStatus": "Parsed",
+  "reasonContains": null,
+  "tags": [
+    "clean",
+    "ua"
   ],
-  "subtotal": 13700.00,
-  "taxAmount": 2740.00,
-  "discountAmount": null,
-  "total": 16440.00
+  "invoice": {
+    "vendorName": "ФОП Коваленко Олена Петрівна",
+    "vendorTaxId": "3124509876",
+    "invoiceNumber": "57",
+    "invoiceDate": "2026-09-03",
+    "dueDate": "2026-09-10",
+    "currency": "UAH",
+    "lineItems": [
+      {
+        "description": "Розробка логотипу",
+        "quantity": 1,
+        "unitPrice": 8500.0,
+        "amount": 8500.0
+      },
+      {
+        "description": "Дизайн візитних карток",
+        "quantity": 2,
+        "unitPrice": 1250.0,
+        "amount": 2500.0
+      },
+      {
+        "description": "Консультація з брендингу",
+        "quantity": 3,
+        "unitPrice": 900.0,
+        "amount": 2700.0
+      }
+    ],
+    "subtotal": 13700.0,
+    "taxAmount": 2740.0,
+    "discountAmount": null,
+    "total": 16440.0
+  }
 }

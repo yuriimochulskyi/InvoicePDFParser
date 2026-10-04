@@ -77,7 +77,10 @@ public class AgentLoopTests
         // The tool result really went back to the model.
         var toolResults = client.Requests[1].Messages.SelectMany(m => m.Contents).OfType<FunctionResultContent>().ToList();
         Assert.Single(toolResults);
-        Assert.Contains("Rechnungsbetrag", toolResults[0].Result?.ToString());
+        var toolResult = toolResults[0].Result?.ToString();
+        Assert.Contains("Rechnungsbetrag", toolResult);
+        Assert.StartsWith("<document", toolResult);          // delimited as untrusted data for the model...
+        Assert.DoesNotContain("<document", run.RawText);     // ...but stored raw for grounding
     }
 
     [Fact]

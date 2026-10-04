@@ -1,8 +1,8 @@
 {
-  "expectedStatus": "Parsed",
+  "expectedStatus": "NeedsReview",
   "reasonContains": null,
   "tags": [
-    "clean",
+    "tampered",
     "de"
   ],
   "invoice": {
@@ -35,6 +35,6 @@
     "subtotal": 1309.9,
     "taxAmount": 248.88,
     "discountAmount": null,
-    "total": 1558.78
+    "total": 1585.78
   }
 }

@@ -2,7 +2,7 @@
   "expectedStatus": "Parsed",
   "reasonContains": null,
   "tags": [
-    "clean",
+    "injection",
     "us"
   ],
   "invoice": {
