@@ -52,7 +52,10 @@ public class AgentLoopTests
             ScriptedChatClient.ToolCall("ValidateTotals", new
             {
                 lineItems = new[] { new { quantity = 12, unitPrice = 85.00, amount = 1020.00 }, new { quantity = 1, unitPrice = 240.00, amount = 240.00 }, new { quantity = 1, unitPrice = 49.90, amount = 49.90 } },
-                subtotal = 1309.90, taxAmount = 248.88, discountAmount = (double?)null, total = 1558.78,
+                subtotal = 1309.90,
+                taxAmount = 248.88,
+                discountAmount = (double?)null,
+                total = 1558.78,
             }),
             ScriptedChatClient.Text("done"),
             // turn 2: formatting

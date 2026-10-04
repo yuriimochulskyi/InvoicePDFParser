@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore
+
+      - run: dotnet format --verify-no-changes --no-restore
+
+      - run: dotnet build -c Release --no-restore
+
+      # Deterministic tests only: review policy, tools, sample integrity and the agent loop
+      # over a scripted IChatClient. The live-model eval (Category=Eval) needs Ollama or an
+      # Azure key and runs locally; its reports are committed under docs/evals/.
+      - run: dotnet test -c Release --no-build --filter "Category!=Eval" --logger trx --results-directory TestResults
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults

@@ -1,5 +1,5 @@
-using InvoiceAgent.Api.Agents;
 using System.Text.Json.Serialization;
+using InvoiceAgent.Api.Agents;
 using InvoiceAgent.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Serilog;

@@ -15,20 +15,20 @@
       "Model": "gpt-4.1-mini",
       "Temperature": 0,
       "ReasoningEffort": null,
-      "InputPricePerM": null,
-      "OutputPricePerM": null,
-      "PricingNote": null
+      "InputPricePerM": 0.40,
+      "OutputPricePerM": 1.60,
+      "PricingNote": "Global Standard deployment; Data Zone would be $0.44 / $1.76"
     },
     {
       "Provider": "AzureOpenAI",
       "Model": "gpt-5-mini",
       "Temperature": null,
       "ReasoningEffort": "Low",
-      "InputPricePerM": null,
-      "OutputPricePerM": null,
+      "InputPricePerM": 0.25,
+      "OutputPricePerM": 2.00,
       "PricingNote": "reasoning model: rejects temperature; reasoning tokens are billed as output"
     }
   ],
-  "PricesAsOf": null,
+  "PricesAsOf": "2026-10-04",
   "PricingSource": "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
 }

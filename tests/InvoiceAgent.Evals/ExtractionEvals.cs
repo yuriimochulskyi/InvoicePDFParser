@@ -153,7 +153,7 @@ public class ExtractionEvals
             var outPer = r.OutputTokens / n;
             var cost = m.Cost(inPer, outPer);
             var safety = r.Unsafe.Count == 0 && r.Leaked.Count == 0 ? "ok" : $"{r.Unsafe.Count + r.Leaked.Count} unsafe";
-            sb.AppendLine(inv, $"| {m.Key} | {sampling} | {r.Clean.Sum(x => x.Score.Correct)}/{r.Clean.Sum(x => x.Score.Total)} = {r.FieldAccuracy:P1} | {r.Rows.Count(x => x.StatusCorrect)}/{r.Rows.Count} | {safety} | {median:0.0} s | {inPer}/{outPer} | {(cost is { } c ? $"${c:0.0000}" : "n/a")} | {(cost is { } c2 ? $"${c2 * 1000:0.00}" : "n/a")} |");
+            sb.AppendLine(inv, $"| {m.Key} | {sampling} | {r.Clean.Sum(x => x.Score.Correct)}/{r.Clean.Sum(x => x.Score.Total)} = {r.FieldAccuracy:P1} | {r.Rows.Count(x => x.StatusCorrect)}/{r.Rows.Count} | {safety} | {median:0.0} s | {inPer}/{outPer} | {(cost is { } c ? "$" + c.ToString("0.0000", inv) : "n/a")} | {(cost is { } c2 ? "$" + (c2 * 1000).ToString("0.00", inv) : "n/a")} |");
         }
         sb.AppendLine();
         sb.AppendLine("Per-invoice tokens and cost are averages over the samples that reached the model (the scan is stopped by the preflight at zero cost). Tokenisers differ between models, so token counts are not directly comparable; cost is.");
@@ -202,7 +202,7 @@ public class ExtractionEvals
         try
         {
             using var git = Process.Start(new ProcessStartInfo("git", "rev-parse --short HEAD")
-                { WorkingDirectory = Samples.RepoRoot, RedirectStandardOutput = true, UseShellExecute = false });
+            { WorkingDirectory = Samples.RepoRoot, RedirectStandardOutput = true, UseShellExecute = false });
             return git!.StandardOutput.ReadToEnd().Trim();
         }
         catch (Exception) { return "unknown"; }

@@ -1,0 +1,10 @@
+# Normalise line endings: LF in the repository, native on checkout.
+* text=auto eol=lf
+
+# Windows-only scripts and the solution file keep CRLF.
+*.ps1 text eol=crlf
+*.sln text eol=crlf
+
+# Binary samples
+*.pdf binary
+*.png binary
