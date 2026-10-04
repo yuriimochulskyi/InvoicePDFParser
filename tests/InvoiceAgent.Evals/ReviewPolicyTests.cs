@@ -31,6 +31,15 @@ public class ReviewPolicyTests
     }
 
     [Fact]
+    public void RunWithError_IsNeedsReview_WithThatReason()
+    {
+        var run = Run(Valid()) with { Error = "Agent run timed out after 300 s" };
+        var (status, reason) = InvoiceReviewPolicy.Decide(run);
+        Assert.Equal(InvoiceStatus.NeedsReview, status);
+        Assert.Equal(run.Error, reason);
+    }
+
+    [Fact]
     public void TotalsWithinTolerance_Pass()
     {
         Assert.True(TotalsValidator.Validate(Valid() with { Total = 1558.79m }).Ok);

@@ -33,6 +33,13 @@ public sealed class InvoiceTools(PdfTextExtractor pdf, ILogger? logger = null)
             logger?.LogWarning("Tool ExtractPdfText -> {Error}", ex.Message);
             return $"ERROR: {ex.Message} Use exactly the fileId given in the request.";
         }
+        catch (Exception ex)
+        {
+            // Corrupt or encrypted PDF: PdfPig throws its own exception types. Tell the model
+            // instead of letting the exception abort the whole run.
+            logger?.LogWarning(ex, "Tool ExtractPdfText -> unreadable PDF");
+            return "ERROR: the file is not a readable PDF (corrupt or encrypted). Report that no text could be extracted.";
+        }
     }
 
     // Typed, numbers-only parameters rather than one invoiceJson string: the framework

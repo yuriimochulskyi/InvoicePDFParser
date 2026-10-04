@@ -17,6 +17,8 @@ builder.Services.AddDbContext<InvoiceDbContext>(o => o.UseSqlite(builder.Configu
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+// Unhandled exceptions become RFC 9457 problem responses (500) instead of empty bodies.
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -26,6 +28,8 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<InvoiceDbContext>().Database.EnsureCreated();
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
 app.UseSwagger();
 app.UseSwaggerUI();

@@ -1,11 +1,10 @@
+using System.ClientModel;
 using System.Diagnostics;
 using System.Text.Json;
 using InvoiceAgent.Api.Models;
 using InvoiceAgent.Api.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using OpenAI.Chat;
-using ChatClient = OpenAI.Chat.ChatClient;
 
 namespace InvoiceAgent.Api.Agents;
 
@@ -22,12 +21,14 @@ public sealed record ExtractionRun(
     string? Error);
 
 public sealed class InvoiceExtractionAgent(
-    ChatClient chatClient,
+    IChatClient chatClient,
     ChatClientFactory.ModelInfo model,
     AiOptions options,
     PdfTextExtractor pdf,
-    ILogger<InvoiceExtractionAgent> logger)
+    ILoggerFactory loggerFactory)
 {
+    private readonly ILogger _logger = loggerFactory.CreateLogger<InvoiceExtractionAgent>();
+
     public const string SystemInstructions = "You extract structured data from invoices of any layout and language.";
 
     private const string Rules = """
@@ -50,10 +51,13 @@ public sealed class InvoiceExtractionAgent(
         var callerCt = ct;
         var runTimeout = TimeSpan.FromSeconds(options.RunTimeoutSeconds);
         // Tools are created per run so we can see exactly what this run called.
-        var tools = new InvoiceTools(pdf, logger);
-        AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
+        var tools = new InvoiceTools(pdf, _logger);
+        AIAgent agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
         {
             Name = "InvoiceExtractor",
+            // The injected client already carries the function-invocation loop with hard caps
+            // (see AddInvoiceAgent); without this the agent would wrap it in a second, uncapped one.
+            UseProvidedChatClientAsIs = true,
             ChatOptions = new ChatOptions
             {
                 Instructions = SystemInstructions + Rules,
@@ -64,7 +68,7 @@ public sealed class InvoiceExtractionAgent(
                 // qwen3 "thinks" by default: ~8x the tokens and latency for no accuracy gain on extraction.
                 Reasoning = model.Provider == "Ollama" ? new ReasoningOptions { Effort = ReasoningEffort.None } : null,
             },
-        });
+        }, loggerFactory);
 
         var sw = Stopwatch.StartNew();
         InvoiceDto? invoice = null;
@@ -88,23 +92,30 @@ public sealed class InvoiceExtractionAgent(
                 session, cancellationToken: ct);
             AddUsage(work);
 
+            // No tools on the formatting turn: providers that allow tools alongside a JSON
+            // schema (Azure) must not start a second tool loop here.
+            var formatOnly = new ChatClientAgentRunOptions(new ChatOptions { ToolMode = ChatToolMode.None });
             AgentResponse<InvoiceDto> final = await agent.RunAsync<InvoiceDto>(
                 "Now return the final extracted invoice as JSON matching the schema. Use null for anything not in the document.",
-                session, cancellationToken: ct);
+                session, options: formatOnly, cancellationToken: ct);
             AddUsage(final);
 
             rawJson = final.Text;
-            invoice = final.Result;
-        }
-        catch (JsonException ex)
-        {
-            error = $"Model returned invalid JSON: {ex.Message}";
+            try
+            {
+                invoice = final.Result;
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                // Empty or non-JSON output is a model failure for this document, not an outage.
+                error = $"Model output could not be parsed as an invoice: {ex.Message}";
+            }
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !callerCt.IsCancellationRequested)
         {
             error = $"Agent run timed out after {runTimeout.TotalSeconds:0} s (slow model or a very long document).";
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (IsTransportFailure(ex))
         {
             // Endpoint down, bad key, quota: an infrastructure failure, not a document that needs review.
             throw new LlmUnavailableException(model.Provider, model.Model, ex);
@@ -120,4 +131,12 @@ public sealed class InvoiceExtractionAgent(
             outTokens += r.Usage?.OutputTokenCount ?? 0;
         }
     }
+
+    /// <summary>The OpenAI client retries and then wraps the failures in an AggregateException.</summary>
+    private static bool IsTransportFailure(Exception ex) => ex switch
+    {
+        ClientResultException or HttpRequestException or IOException => true,
+        AggregateException agg => agg.InnerExceptions.Count > 0 && agg.InnerExceptions.All(IsTransportFailure),
+        _ => false,
+    };
 }

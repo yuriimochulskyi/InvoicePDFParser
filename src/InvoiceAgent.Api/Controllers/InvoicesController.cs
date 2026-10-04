@@ -17,15 +17,15 @@ public sealed class InvoicesController(InvoiceProcessingService processing, Invo
     public async Task<ActionResult<ProcessingResult>> Upload(IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
-            return BadRequest("Upload one PDF file in the 'file' form field.");
+            return Problem("Upload one PDF file in the 'file' form field.", statusCode: StatusCodes.Status400BadRequest, title: "Invalid upload");
         if (file.Length > MaxPdfBytes)
-            return BadRequest($"The file is larger than {MaxPdfBytes / (1024 * 1024)} MB.");
+            return Problem($"The file is larger than {MaxPdfBytes / (1024 * 1024)} MB.", statusCode: StatusCodes.Status413PayloadTooLarge, title: "File too large");
 
         await using var stream = file.OpenReadStream();
         var header = new byte[5];
         if (await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct) < header.Length
             || !header.AsSpan().SequenceEqual("%PDF-"u8))
-            return BadRequest("Only PDF files are supported.");
+            return Problem("Only PDF files are supported.", statusCode: StatusCodes.Status400BadRequest, title: "Invalid upload");
         stream.Position = 0;
 
         try
