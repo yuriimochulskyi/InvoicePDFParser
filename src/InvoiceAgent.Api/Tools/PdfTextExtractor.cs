@@ -4,19 +4,52 @@ using UglyToad.PdfPig.Content;
 
 namespace InvoiceAgent.Api.Tools;
 
-public sealed class PdfTextExtractor(PdfFileStore store)
+/// <summary>Text of a PDF plus what the preflight needs to know about it.</summary>
+public sealed record PdfText(string Text, int Pages, int WordCount)
 {
-    public string Extract(string fileId)
+    /// <summary>No text layer at all: a scan or an image-only export. OCR would be needed.</summary>
+    public bool HasTextLayer => WordCount > 0;
+}
+
+/// <summary>
+/// Where the document text comes from. Today PdfPig over the text layer; an OCR
+/// implementation (e.g. Azure Document Intelligence) plugs in here without touching
+/// the agent, the tools or the review policy.
+/// </summary>
+public interface IPdfTextSource
+{
+    /// <exception cref="UnreadablePdfException">The file is corrupt, encrypted or not a PDF.</exception>
+    PdfText Extract(string fileId);
+}
+
+public sealed class UnreadablePdfException(string message, Exception? inner = null) : Exception(message, inner);
+
+public sealed class PdfTextExtractor(PdfFileStore store) : IPdfTextSource
+{
+    public PdfText Extract(string fileId)
     {
-        using var document = PdfDocument.Open(store.GetPath(fileId));
-        var sb = new StringBuilder();
-        foreach (var page in document.GetPages())
+        var path = store.GetPath(fileId);
+        try
         {
-            sb.AppendLine($"--- page {page.Number} ---");
-            foreach (var line in Lines(page))
-                sb.AppendLine(line);
+            using var document = PdfDocument.Open(path);
+            var sb = new StringBuilder();
+            var words = 0;
+            foreach (var page in document.GetPages())
+            {
+                sb.AppendLine($"--- page {page.Number} ---");
+                foreach (var (line, lineWords) in Lines(page))
+                {
+                    sb.AppendLine(line);
+                    words += lineWords;
+                }
+            }
+            return new PdfText(sb.ToString(), document.NumberOfPages, words);
         }
-        return sb.ToString();
+        catch (Exception ex) when (ex is not (ArgumentException or FileNotFoundException))
+        {
+            // PdfPig has its own exception types for corrupt and encrypted files.
+            throw new UnreadablePdfException("The file is not a readable PDF (corrupt, encrypted or not a PDF).", ex);
+        }
     }
 
     /// <summary>
@@ -24,7 +57,7 @@ public sealed class PdfTextExtractor(PdfFileStore store)
     /// Plain text extraction turns a table row into "1 8 500,00 8 500,00", which is
     /// ambiguous (1 × 8 500,00 or 18 × 500,00); with gaps it reads "1 | 8 500,00 | 8 500,00".
     /// </summary>
-    private static IEnumerable<string> Lines(Page page)
+    private static IEnumerable<(string Line, int Words)> Lines(Page page)
     {
         var words = page.GetWords().Where(w => !string.IsNullOrWhiteSpace(w.Text)).ToList();
         var rows = new List<List<Word>>();
@@ -52,7 +85,7 @@ public sealed class PdfTextExtractor(PdfFileStore store)
                 sb.Append(word.Text);
                 previous = word;
             }
-            yield return sb.ToString();
+            yield return (sb.ToString(), row.Count);
         }
     }
 }

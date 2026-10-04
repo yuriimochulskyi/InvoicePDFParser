@@ -1,0 +1,9 @@
+{
+  "expectedStatus": "NeedsReview",
+  "reasonContains": "no text layer",
+  "tags": [
+    "scan",
+    "de"
+  ],
+  "invoice": null
+}

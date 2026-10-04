@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using InvoiceAgent.Api.Agents;
 using InvoiceAgent.Api.Data;
+using InvoiceAgent.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,13 +60,13 @@ public class ExtractionEvals
                 await using var pdf = File.OpenRead(sample.PdfPath);
                 var result = await service.ProcessAsync(pdf, Path.GetFileName(sample.PdfPath), ct);
                 var record = (await db.Invoices.FindAsync([result.Id], ct))!;
-                rows.Add(new(sample, result.Status, result.ReviewReason, FieldComparer.Compare(sample.Expected.Invoice, result.Invoice),
+                rows.Add(new(sample, result.Status, result.ReviewReason, Score(sample, result.Invoice),
                     record.LatencyMs, record.InputTokens, record.OutputTokens, record.ExtractedJson, null));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // One failed sample (e.g. a 429 from a cloud provider) must not lose the whole report.
-                rows.Add(new(sample, null, null, FieldComparer.Compare(sample.Expected.Invoice, null), 0, null, null, null, ex.Message));
+                rows.Add(new(sample, null, null, Score(sample, null), 0, null, null, null, ex.Message));
             }
         }
 
@@ -90,6 +91,10 @@ public class ExtractionEvals
         Assert.True(fieldAccuracy >= RequiredFieldAccuracy,
             $"Field accuracy on clean samples {fieldAccuracy:P1} is below the required {RequiredFieldAccuracy:P0}. See {reportPath}.");
     }
+
+    /// <summary>A sample without an expected invoice (e.g. a scan) is judged on its status only.</summary>
+    private static FieldScore Score(Sample sample, InvoiceDto? actual) =>
+        sample.Expected.Invoice is { } expected ? FieldComparer.Compare(expected, actual) : new FieldScore(0, 0, []);
 
     private static string Report(AiOptions options, ChatClientFactory.ModelInfo model, List<EvalRow> rows, double fieldAccuracy, int unsafeCount)
     {

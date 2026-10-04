@@ -14,7 +14,7 @@ public sealed record ExpectedCase(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] InvoiceStatus ExpectedStatus,
     string? ReasonContains,
     string[] Tags,
-    InvoiceDto Invoice)
+    InvoiceDto? Invoice)
 {
     public bool Has(string tag) => Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
 }

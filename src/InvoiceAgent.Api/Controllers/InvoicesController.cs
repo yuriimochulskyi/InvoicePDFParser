@@ -2,6 +2,7 @@ using System.Text.Json;
 using InvoiceAgent.Api.Agents;
 using InvoiceAgent.Api.Data;
 using InvoiceAgent.Api.Models;
+using InvoiceAgent.Api.Tools;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InvoiceAgent.Api.Controllers;
@@ -32,6 +33,10 @@ public sealed class InvoicesController(InvoiceProcessingService processing, Invo
         {
             var result = await processing.ProcessAsync(stream, file.FileName, ct);
             return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        }
+        catch (UnreadablePdfException ex)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Invalid upload");
         }
         catch (LlmUnavailableException ex)
         {

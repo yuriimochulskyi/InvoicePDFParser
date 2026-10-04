@@ -36,7 +36,7 @@ public static class ServiceCollectionExtensions
             })
             .Build());
         services.AddSingleton(new PdfFileStore(uploadsPath));
-        services.AddSingleton<PdfTextExtractor>();
+        services.AddSingleton<IPdfTextSource, PdfTextExtractor>();
         services.AddScoped<InvoiceExtractionAgent>();
         services.AddScoped<InvoiceProcessingService>();
         return services;

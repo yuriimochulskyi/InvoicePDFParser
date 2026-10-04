@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using InvoiceAgent.Api.Data;
 using InvoiceAgent.Api.Models;
@@ -7,17 +8,32 @@ namespace InvoiceAgent.Api.Agents;
 
 public sealed record ProcessingResult(Guid Id, InvoiceStatus Status, string? ReviewReason, InvoiceDto? Invoice);
 
-/// <summary>The whole pipeline: store file → agent → deterministic review → persist. Used by the API and the evals.</summary>
+/// <summary>
+/// The whole pipeline: store file → preflight → agent → deterministic review → persist.
+/// Used by the API and the evals.
+/// </summary>
 public sealed class InvoiceProcessingService(
     PdfFileStore store,
+    IPdfTextSource textSource,
     InvoiceExtractionAgent agent,
+    ChatClientFactory.ModelInfo model,
+    AiOptions options,
     InvoiceDbContext db,
     ILogger<InvoiceProcessingService> logger)
 {
+    /// <exception cref="UnreadablePdfException">The upload is not a readable PDF (maps to 400).</exception>
+    /// <exception cref="LlmUnavailableException">The model endpoint failed (maps to 503).</exception>
     public async Task<ProcessingResult> ProcessAsync(Stream pdf, string fileName, CancellationToken ct = default)
     {
         var fileId = await store.SaveAsync(pdf, ct);
-        var run = await agent.RunAsync(fileId, ct);
+
+        // Decide in code whether this document is worth a model call at all.
+        var sw = Stopwatch.StartNew();
+        var preflight = DocumentPreflight.Check(textSource.Extract(fileId), options.MaxDocumentChars);
+        var run = preflight.Ok
+            ? await agent.RunAsync(fileId, ct)
+            : new ExtractionRun(null, preflight.Document.Text, null, model.Provider, model.Model, 0, 0, sw.ElapsedMilliseconds, [], preflight.ReviewReason);
+
         var (status, reason) = InvoiceReviewPolicy.Decide(run);
 
         var record = new InvoiceRecord

@@ -10,7 +10,7 @@ public sealed record TotalsLine(decimal? Quantity, decimal? UnitPrice, decimal? 
 /// Tools exposed to the agent. One instance per agent run, so it can record
 /// which tools were called and keep the raw text for persistence.
 /// </summary>
-public sealed class InvoiceTools(PdfTextExtractor pdf, ILogger? logger = null)
+public sealed class InvoiceTools(IPdfTextSource pdf, ILogger? logger = null)
 {
     private const int MaxValidations = 3;
     private readonly List<string> _calls = [];
@@ -24,7 +24,7 @@ public sealed class InvoiceTools(PdfTextExtractor pdf, ILogger? logger = null)
         _calls.Add(nameof(ExtractPdfText));
         try
         {
-            ExtractedText = pdf.Extract(fileId);
+            ExtractedText = pdf.Extract(fileId).Text;
             logger?.LogInformation("Tool ExtractPdfText -> {Chars} chars", ExtractedText.Length);
             // The document is third-party input and may contain text aimed at the model
             // ("ignore previous instructions..."). Delimit it so the model can tell data from
@@ -37,12 +37,11 @@ public sealed class InvoiceTools(PdfTextExtractor pdf, ILogger? logger = null)
             logger?.LogWarning("Tool ExtractPdfText -> {Error}", ex.Message);
             return $"ERROR: {ex.Message} Use exactly the fileId given in the request.";
         }
-        catch (Exception ex)
+        catch (UnreadablePdfException ex)
         {
-            // Corrupt or encrypted PDF: PdfPig throws its own exception types. Tell the model
-            // instead of letting the exception abort the whole run.
+            // Normally caught by the preflight; if it still happens, tell the model instead of aborting the run.
             logger?.LogWarning(ex, "Tool ExtractPdfText -> unreadable PDF");
-            return "ERROR: the file is not a readable PDF (corrupt or encrypted). Report that no text could be extracted.";
+            return "ERROR: the file is not a readable PDF. Report that no text could be extracted.";
         }
     }
 

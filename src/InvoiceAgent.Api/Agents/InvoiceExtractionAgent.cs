@@ -24,7 +24,7 @@ public sealed class InvoiceExtractionAgent(
     IChatClient chatClient,
     ChatClientFactory.ModelInfo model,
     AiOptions options,
-    PdfTextExtractor pdf,
+    IPdfTextSource pdf,
     ILoggerFactory loggerFactory)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<InvoiceExtractionAgent>();

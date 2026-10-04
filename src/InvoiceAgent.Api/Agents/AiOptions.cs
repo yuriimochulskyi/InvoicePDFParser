@@ -8,6 +8,12 @@ public sealed class AiOptions
 
     /// <summary>Hard limit for one agent run; a local model partly offloaded to CPU needs ~2 min for a long invoice.</summary>
     public int RunTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// Longest document text sent to the model. ~14k characters is roughly 4-6k tokens
+    /// (Cyrillic tokenises worse than Latin), which with the two-turn loop fits an 8k context.
+    /// </summary>
+    public int MaxDocumentChars { get; set; } = 14000;
     public OllamaOptions Ollama { get; set; } = new();
     public AzureOpenAIOptions AzureOpenAI { get; set; } = new();
 
