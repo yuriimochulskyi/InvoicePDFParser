@@ -31,6 +31,23 @@ public class ReviewPolicyTests
     }
 
     [Fact]
+    public void Configuration_IsValidatedAtStartup()
+    {
+        Assert.Empty(new AiOptions().Validate()); // defaults: local Ollama
+
+        var azureWithoutSecrets = new AiOptions { Provider = AiProvider.AzureOpenAI };
+        var errors = azureWithoutSecrets.Validate();
+        Assert.Contains(errors, e => e.Contains("Ai:AzureOpenAI:Endpoint"));
+        Assert.Contains(errors, e => e.Contains("Ai:AzureOpenAI:ApiKey"));
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new Microsoft.Extensions.DependencyInjection.ServiceCollection().AddInvoiceAgent(azureWithoutSecrets, "uploads"));
+        Assert.Contains("Invalid AI configuration", ex.Message);
+
+        Assert.Contains(new AiOptions { RunTimeoutSeconds = 1 }.Validate(), e => e.Contains("RunTimeoutSeconds"));
+    }
+
+    [Fact]
     public void RunWithError_IsNeedsReview_WithThatReason()
     {
         var run = Run(Valid()) with { Error = "Agent run timed out after 300 s" };

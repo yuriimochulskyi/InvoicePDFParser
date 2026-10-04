@@ -16,9 +16,9 @@ image-only scan). Every model, same pipeline, same samples. Full report: [docs/e
 
 | Model | Field accuracy (clean) | Statuses correct | Decision safety | Median latency | Cost / 1,000 invoices |
 |---|---|---|---|---|---|
-| `qwen3:8b` on Ollama (RTX 3060 Ti) | 96/97 = 99.0% | 9/9 | ok | 6.7 s | $0 (local) |
+| `qwen3:8b` on Ollama (RTX 3060 Ti) | 96/97 = 99.0% | 9/9 | ok | 15.0 s | $0 (local) |
 | `gpt-4.1-mini` on Azure OpenAI | 96/97 = 99.0% | 9/9 | ok | 4.0 s | $2.02 |
-| `gpt-5-mini` on Azure OpenAI, reasoning low | 96/97 = 99.0% | 9/9 | ok | 7.7 s | $2.53 |
+| `gpt-5-mini` on Azure OpenAI, reasoning low | 96/97 = 99.0% | 9/9 | ok | 8.3 s | $2.51 |
 
 The accuracy is the same on all three. What differs is speed and price, which says that the extraction quality
 comes from the pipeline around the model (column-aware text, self-check tool, deterministic review) rather than from
@@ -67,7 +67,7 @@ the production code path.
 | `src/InvoiceAgent.Api/Tools` | PDF store, text extraction (`IPdfTextSource`), preflight, `ValidateTotals`, amount grounding |
 | `src/InvoiceAgent.Api/Models` | `InvoiceDto` (its `[Description]`s become the JSON schema) |
 | `src/InvoiceAgent.Api/Data` | EF Core + SQLite |
-| `tests/InvoiceAgent.Evals` | 64 deterministic tests, scripted agent-loop tests, the live-model eval, `evals.json` |
+| `tests/InvoiceAgent.Evals` | 72 deterministic tests (policy, samples, agent loop, HTTP), the live-model eval, `evals.json` |
 | `samples/invoices` | 9 PDFs, their HTML sources, `*.expected.json` with the expected status |
 | `docs/evals` | committed eval reports |
 
@@ -111,7 +111,9 @@ curl -F "file=@samples/invoices/02-de-rechnung.pdf" http://localhost:5185/api/in
 }
 ```
 
-`GET /api/invoices/{id}` returns the stored record with telemetry, the raw model JSON and the extracted PDF text.
+`GET /api/invoices/{id}` returns the same typed `InvoiceResponse` plus run telemetry (provider, model, tokens,
+latency, tool calls); `?includeText=true` adds the extracted document text, which is left out by default because it
+is the bulk of the payload and may hold personal data.
 
 ## How the agent loop works
 
@@ -235,21 +237,24 @@ above. Foundry *projects* can also be consumed through `Microsoft.Agents.AI.Foun
 change, and it is not exercised here.
 
 Other settings: `Ai:RunTimeoutSeconds` (default 300), `Ai:MaxDocumentChars` (default 14000),
-`ConnectionStrings:Invoices` (default `invoices.db`).
+`ConnectionStrings:Invoices` (default `invoices.db`). The `Ai` section is validated when the host starts
+(`AiOptions.Validate()`): a missing Azure endpoint or key, or an out-of-range timeout, stops the application with
+the list of problems instead of failing the first upload.
 
 ## Tests and evals
 
 ```powershell
 dotnet test                                   # everything; the live eval skips itself without a model
-dotnet test --filter "Category!=Eval"         # what CI runs: 64 deterministic tests, under a second
+dotnet test --filter "Category!=Eval"         # what CI runs: 72 deterministic tests, about two seconds
 dotnet test --filter "Category=Eval"          # live models from evals.json; EVAL_MODELS=gpt-5-mini for a subset
 ```
 
-Three levels:
+Four levels:
 
 1. **Deterministic tests** (`ReviewPolicyTests`, `SampleIntegrityTests`): the review policy, totals, grounding in several locales, the preflight, and the integrity of every `expected.json` (its arithmetic, its identifiers in the PDF text, and that the policy over the ground truth yields the expected status).
 2. **Agent-loop tests without a model** (`AgentLoopTests`): a `ScriptedChatClient` plays the LLM; the function-invocation loop, both tools, the real PDF and the policy are real. They pin the two-turn contract (tools and no schema first, schema and `ToolMode.None` last), usage aggregation, "no JSON → NeedsReview, not 503", "transport failure → 503", "never read the PDF → NeedsReview" and the iteration cap on a model that keeps calling tools.
-3. **Live eval** (`ExtractionEvals`): every PDF through the real pipeline for every model in `tests/InvoiceAgent.Evals/evals.json`, scored against `expected.json`. It writes `TestResults/eval-report.md`; snapshots are committed under `docs/evals/`.
+3. **HTTP tests** (`ApiTests`): the real ASP.NET Core pipeline through `WebApplicationFactory`, with the scripted client and in-memory SQLite. They pin 201 + `Location`, the response shape, `application/problem+json` for 400/404/503, "scan → NeedsReview with zero tokens", "503 stores nothing" and the typed contract in Swagger. Their first run caught a real defect: a class-level `[Produces("application/json")]` was overriding the ProblemDetails content type.
+4. **Live eval** (`ExtractionEvals`): every PDF through the real pipeline for every model in `tests/InvoiceAgent.Evals/evals.json`, scored against `expected.json`. It writes `TestResults/eval-report.md`; snapshots are committed under `docs/evals/`.
 
 Scoring: strings, dates and currency exact (trimmed, case-insensitive); amounts within 0.01; line-item count must
 match, then each line amount. Gates, per model:
@@ -277,9 +282,9 @@ the same nine samples:
 
 | Model | Sampling | Field accuracy | Statuses | Median latency | Tokens in / out per invoice | Cost / invoice | Cost / 1,000 |
 |---|---|---|---|---|---|---|---|
-| `qwen3:8b` (Ollama, RTX 3060 Ti 8 GB) | T=0, reasoning off | 99.0% | 9/9 | 6.7 s | 5647 / 535 | $0 | $0 |
-| `gpt-4.1-mini` (Azure, Global Standard) | T=0 | 99.0% | 9/9 | 4.0 s | 3843 / 302 | $0.0020 | $2.02 |
-| `gpt-5-mini` (Azure, Global Standard) | reasoning low | 99.0% | 9/9 | 7.7 s | 4168 / 746 | $0.0025 | $2.53 |
+| `qwen3:8b` (Ollama, RTX 3060 Ti 8 GB) | T=0, reasoning off | 99.0% | 9/9 | 15.0 s | 5482 / 530 | $0 | $0 |
+| `gpt-4.1-mini` (Azure, Global Standard) | T=0 | 99.0% | 9/9 | 4.0 s | 3833 / 303 | $0.0020 | $2.02 |
+| `gpt-5-mini` (Azure, Global Standard) | reasoning low | 99.0% | 9/9 | 8.3 s | 4160 / 733 | $0.0025 | $2.51 |
 
 How it is computed: `cost = input tokens × input price + output tokens × output price`, with the token counts the
 pipeline records for every run (summed over all model calls of an invoice, including each tool round) and the list
@@ -290,8 +295,8 @@ Reading the table:
 
 - Same accuracy on all three. The pipeline, not the model, carries the quality here.
 - `gpt-4.1-mini` is the fastest and the cheapest per invoice.
-- `gpt-5-mini` spends 2.5× the output tokens on reasoning for the same result; for extraction, reasoning does not pay.
-- The local model costs nothing per token and is about 1.7× slower than the cloud at the median; it is the option when documents may not leave the machine.
+- `gpt-5-mini` spends about 2.4× the output tokens on reasoning for the same result; for extraction, reasoning does not pay.
+- The local model costs nothing per token and is 2–4× slower than the cloud; its median varied between 7 s and 15 s across runs on the same GPU. It is the option when documents may not leave the machine.
 - About half the input tokens are the conversation history re-sent on each tool round; prompt caching or a single-turn design would cut the cloud cost further.
 
 Caveats: tokenisers differ, so token counts are not comparable across models, only cost is; cached-input discounts

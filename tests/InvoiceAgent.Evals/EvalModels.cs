@@ -7,7 +7,7 @@ namespace InvoiceAgent.Evals;
 
 /// <summary>One row of the model comparison: which deployment, how to sample, what it costs.</summary>
 public sealed record EvalModel(
-    string Provider,
+    [property: JsonConverter(typeof(JsonStringEnumConverter))] AiProvider Provider,
     string Model,
     float? Temperature,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] ReasoningEffort? ReasoningEffort,
@@ -33,7 +33,7 @@ public sealed record EvalModel(
             Ollama = new() { Endpoint = baseOptions.Ollama.Endpoint, Model = baseOptions.Ollama.Model },
             AzureOpenAI = new() { Endpoint = baseOptions.AzureOpenAI.Endpoint, ApiKey = baseOptions.AzureOpenAI.ApiKey, Deployment = baseOptions.AzureOpenAI.Deployment },
         };
-        if (Provider == "Ollama") o.Ollama.Model = Model; else o.AzureOpenAI.Deployment = Model;
+        if (Provider == AiProvider.Ollama) o.Ollama.Model = Model; else o.AzureOpenAI.Deployment = Model;
         o.Generation.Temperature = Temperature;
         o.Generation.ReasoningEffort = ReasoningEffort;
         return o;

@@ -36,3 +36,6 @@ app.UseSwaggerUI();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>Exposed so WebApplicationFactory can host the API in tests.</summary>
+public partial class Program;

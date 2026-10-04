@@ -222,7 +222,7 @@ public class ExtractionEvals
     /// <summary>Why a model cannot run here (no Ollama, model not pulled, no Azure key), or null to run it.</summary>
     private static async Task<string?> ReasonToSkipAsync(EvalModel model, AiOptions baseOptions, CancellationToken ct)
     {
-        if (model.Provider == "AzureOpenAI")
+        if (model.Provider == AiProvider.AzureOpenAI)
             return string.IsNullOrWhiteSpace(baseOptions.AzureOpenAI.Endpoint) || string.IsNullOrWhiteSpace(baseOptions.AzureOpenAI.ApiKey)
                 ? "Ai:AzureOpenAI:Endpoint / ApiKey are not set (dotnet user-secrets, see README)."
                 : null;

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using InvoiceAgent.Api.Agents;
 using InvoiceAgent.Api.Data;
 using InvoiceAgent.Api.Models;
@@ -11,11 +10,22 @@ namespace InvoiceAgent.Api.Controllers;
 [Route("api/invoices")]
 public sealed class InvoicesController(InvoiceProcessingService processing, InvoiceDbContext db) : ControllerBase
 {
+    private const long MaxPdfBytes = 10 * 1024 * 1024;
+
+    /// <summary>Extracts structured data from one PDF invoice and decides whether it needs human review.</summary>
+    /// <remarks>
+    /// 201 means the pipeline ran; <c>status</c> tells whether the result can be trusted.
+    /// A document or model problem is <c>NeedsReview</c> with a reason, never an HTTP error.
+    /// </remarks>
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxPdfBytes + 64 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxPdfBytes + 64 * 1024)]
-    public async Task<ActionResult<ProcessingResult>> Upload(IFormFile file, CancellationToken ct)
+    [ProducesResponseType<InvoiceResponse>(StatusCodes.Status201Created, "application/json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<ActionResult<InvoiceResponse>> Upload(IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return Problem("Upload one PDF file in the 'file' form field.", statusCode: StatusCodes.Status400BadRequest, title: "Invalid upload");
@@ -32,7 +42,7 @@ public sealed class InvoicesController(InvoiceProcessingService processing, Invo
         try
         {
             var result = await processing.ProcessAsync(stream, file.FileName, ct);
-            return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+            return CreatedAtAction(nameof(Get), new { id = result.Id }, InvoiceResponse.From(result.Record));
         }
         catch (UnreadablePdfException ex)
         {
@@ -44,30 +54,13 @@ public sealed class InvoicesController(InvoiceProcessingService processing, Invo
         }
     }
 
-    private const long MaxPdfBytes = 10 * 1024 * 1024;
-
+    /// <summary>Returns a stored result. Add <c>?includeText=true</c> for the extracted document text.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    [ProducesResponseType<InvoiceResponse>(StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public async Task<ActionResult<InvoiceResponse>> Get(Guid id, [FromQuery] bool includeText = false, CancellationToken ct = default)
     {
-        var r = await db.Invoices.FindAsync([id], ct);
-        if (r is null)
-            return NotFound();
-
-        InvoiceDto? invoice = null;
-        try { invoice = r.ExtractedJson is null ? null : JsonSerializer.Deserialize<InvoiceDto>(r.ExtractedJson, JsonSerializerOptions.Web); }
-        catch (JsonException) { /* raw model output that failed to parse; still returned below */ }
-
-        return Ok(new
-        {
-            r.Id,
-            r.Status,
-            r.ReviewReason,
-            invoice,
-            r.FileName,
-            r.CreatedAt,
-            telemetry = new { r.Provider, r.Model, r.InputTokens, r.OutputTokens, r.LatencyMs, toolCalls = r.ToolCalls.Split(',', StringSplitOptions.RemoveEmptyEntries) },
-            r.ExtractedJson,
-            r.RawText,
-        });
+        var record = await db.Invoices.FindAsync([id], ct);
+        return record is null ? NotFound() : InvoiceResponse.From(record, includeText);
     }
 }

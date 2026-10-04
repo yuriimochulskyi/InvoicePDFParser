@@ -2,11 +2,13 @@ using Microsoft.Extensions.AI;
 
 namespace InvoiceAgent.Api.Agents;
 
+public enum AiProvider { Ollama, AzureOpenAI }
+
 public sealed class AiOptions
 {
     public const string Section = "Ai";
 
-    public string Provider { get; set; } = "Ollama";
+    public AiProvider Provider { get; set; } = AiProvider.Ollama;
 
     /// <summary>Hard limit for one agent run; a local model partly offloaded to CPU needs ~2 min for a long invoice.</summary>
     public int RunTimeoutSeconds { get; set; } = 300;
@@ -21,7 +23,40 @@ public sealed class AiOptions
     public AzureOpenAIOptions AzureOpenAI { get; set; } = new();
 
     /// <summary>Generation settings of the selected provider.</summary>
-    public GenerationOptions Generation => Provider == "AzureOpenAI" ? AzureOpenAI : Ollama;
+    public GenerationOptions Generation => Provider == AiProvider.AzureOpenAI ? AzureOpenAI : Ollama;
+
+    /// <summary>
+    /// Configuration problems, checked once at startup so a bad setting fails the host
+    /// with a clear message instead of the first upload with a provider error.
+    /// </summary>
+    public IReadOnlyList<string> Validate()
+    {
+        var errors = new List<string>();
+        if (RunTimeoutSeconds is < 10 or > 3600)
+            errors.Add($"Ai:RunTimeoutSeconds must be between 10 and 3600 (was {RunTimeoutSeconds}).");
+        if (MaxDocumentChars < 1000)
+            errors.Add($"Ai:MaxDocumentChars must be at least 1000 (was {MaxDocumentChars}).");
+        if (Generation.Temperature is < 0 or > 2)
+            errors.Add($"Ai:{Provider}:Temperature must be between 0 and 2, or null to send none.");
+
+        if (Provider == AiProvider.Ollama)
+        {
+            if (!Uri.TryCreate(Ollama.Endpoint, UriKind.Absolute, out _))
+                errors.Add("Ai:Ollama:Endpoint must be an absolute URL, e.g. http://localhost:11434.");
+            if (string.IsNullOrWhiteSpace(Ollama.Model))
+                errors.Add("Ai:Ollama:Model must be set, e.g. qwen3:8b.");
+        }
+        else
+        {
+            if (!Uri.TryCreate(AzureOpenAI.Endpoint, UriKind.Absolute, out _))
+                errors.Add("Ai:AzureOpenAI:Endpoint must be set to the resource URL (dotnet user-secrets).");
+            if (string.IsNullOrWhiteSpace(AzureOpenAI.ApiKey))
+                errors.Add("Ai:AzureOpenAI:ApiKey must be set (dotnet user-secrets, never appsettings.json).");
+            if (string.IsNullOrWhiteSpace(AzureOpenAI.Deployment))
+                errors.Add("Ai:AzureOpenAI:Deployment must be set to the deployment name.");
+        }
+        return errors;
+    }
 
     /// <summary>
     /// Sampling settings differ per model family, so they are data, not code:

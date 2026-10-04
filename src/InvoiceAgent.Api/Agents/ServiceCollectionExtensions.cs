@@ -12,6 +12,10 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInvoiceAgent(this IServiceCollection services, AiOptions options, string uploadsPath)
     {
+        var errors = options.Validate();
+        if (errors.Count > 0)
+            throw new InvalidOperationException("Invalid AI configuration: " + string.Join(" ", errors));
+
         var (chatClient, modelInfo) = ChatClientFactory.Create(options);
         return services.AddInvoiceAgent(options, uploadsPath, chatClient, modelInfo);
     }

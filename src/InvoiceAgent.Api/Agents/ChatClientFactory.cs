@@ -22,26 +22,24 @@ public static class ChatClientFactory
 
         switch (options.Provider)
         {
-            case "Ollama":
+            case AiProvider.Ollama:
                 clientOptions.Endpoint = new Uri(options.Ollama.Endpoint.TrimEnd('/') + "/v1");
                 // Ollama ignores the key, but the client requires one.
                 var ollama = new OpenAIClient(new ApiKeyCredential("ollama"), clientOptions);
-                return (ollama.GetChatClient(options.Ollama.Model).AsIChatClient(), new("Ollama", options.Ollama.Model));
+                return (ollama.GetChatClient(options.Ollama.Model).AsIChatClient(), new(nameof(AiProvider.Ollama), options.Ollama.Model));
 
-            case "AzureOpenAI":
+            case AiProvider.AzureOpenAI:
                 var az = options.AzureOpenAI;
-                if (string.IsNullOrWhiteSpace(az.Endpoint) || string.IsNullOrWhiteSpace(az.ApiKey))
-                    throw new InvalidOperationException("Ai:AzureOpenAI:Endpoint and Ai:AzureOpenAI:ApiKey must be set (use dotnet user-secrets for the key).");
 
                 var endpoint = az.Endpoint.TrimEnd('/');
                 if (!endpoint.EndsWith("/openai/v1", StringComparison.OrdinalIgnoreCase))
                     endpoint += "/openai/v1";
                 clientOptions.Endpoint = new Uri(endpoint + "/");
                 var azure = new OpenAIClient(new ApiKeyCredential(az.ApiKey), clientOptions);
-                return (azure.GetChatClient(az.Deployment).AsIChatClient(), new("AzureOpenAI", az.Deployment));
+                return (azure.GetChatClient(az.Deployment).AsIChatClient(), new(nameof(AiProvider.AzureOpenAI), az.Deployment));
 
             default:
-                throw new InvalidOperationException($"Unknown Ai:Provider '{options.Provider}'. Use 'Ollama' or 'AzureOpenAI'.");
+                throw new InvalidOperationException($"Unknown Ai:Provider '{options.Provider}'.");
         }
     }
 }

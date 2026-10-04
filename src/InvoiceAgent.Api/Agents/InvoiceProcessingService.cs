@@ -6,7 +6,13 @@ using InvoiceAgent.Api.Tools;
 
 namespace InvoiceAgent.Api.Agents;
 
-public sealed record ProcessingResult(Guid Id, InvoiceStatus Status, string? ReviewReason, InvoiceDto? Invoice);
+/// <summary>The stored record plus the typed invoice the run produced (null when extraction failed).</summary>
+public sealed record ProcessingResult(InvoiceRecord Record, InvoiceDto? Invoice)
+{
+    public Guid Id => Record.Id;
+    public InvoiceStatus Status => Record.Status;
+    public string? ReviewReason => Record.ReviewReason;
+}
 
 /// <summary>
 /// The whole pipeline: store file → preflight → agent → deterministic review → persist.
@@ -60,6 +66,6 @@ public sealed class InvoiceProcessingService(
             record.Id, fileName, run.Provider, run.Model, run.InputTokens, run.OutputTokens, run.LatencyMs,
             record.ToolCalls, status, reason);
 
-        return new(record.Id, status, reason, run.Invoice);
+        return new(record, run.Invoice);
     }
 }
