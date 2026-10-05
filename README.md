@@ -14,7 +14,8 @@ checks its own arithmetic through tools, and code decides the outcome. The same 
 
 Nine sample invoices in six languages, including three hard ones: a tampered total, a hidden prompt injection and
 an image-only scan that is read through OCR. Every model, same pipeline, same samples. Full report:
-[docs/evals/2026-10-05-model-comparison.md](docs/evals/2026-10-05-model-comparison.md).
+[docs/evals/2026-10-05-model-comparison.md](docs/evals/2026-10-05-model-comparison.md); the same results on one page:
+[results summary (PDF)](docs/summary/invoice-pdf-parser-results.pdf).
 
 | Model | Field accuracy (clean) | Statuses correct | Decision safety | Median latency | Cost / 1,000 invoices |
 |---|---|---|---|---|---|

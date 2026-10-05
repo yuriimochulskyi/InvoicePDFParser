@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice PDF Parser: results summary</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root { --ink: #1a2433; --muted: #5b6878; --line: #d9dee6; --accent: #0f6e6e; --accent-soft: #e6f2f1; --warn: #9a4a12; --warn-soft: #fbf0e4; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: var(--ink); font-size: 9.9pt; line-height: 1.38; }
+  .page { width: 210mm; height: 297mm; padding: 12mm 15mm 9mm; display: flex; flex-direction: column; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--accent); padding-bottom: 9px; }
+  h1 { font-size: 22pt; margin: 0; letter-spacing: -0.3px; }
+  .tag { color: var(--muted); font-size: 9.6pt; margin-top: 3px; }
+  .who { text-align: right; font-size: 9.2pt; color: var(--muted); line-height: 1.5; }
+  .who b { color: var(--ink); font-size: 10.2pt; }
+  a { color: var(--accent); text-decoration: none; }
+  .lead { margin: 9px 0 0; font-size: 10.3pt; }
+  h2 { font-size: 8.8pt; text-transform: uppercase; letter-spacing: 1.1px; color: var(--accent); margin: 12px 0 6px; }
+  .flow { display: grid; grid-template-columns: 1fr 14px 1.15fr 14px 1.5fr 14px 1.35fr 14px 1.1fr; align-items: stretch; }
+  .step { border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; font-size: 8.8pt; line-height: 1.32; }
+  .step b { display: block; font-size: 9.4pt; margin-bottom: 2px; }
+  .step.model { background: var(--warn-soft); border-color: #ecd3b6; }
+  .step.code { background: var(--accent-soft); border-color: #bcdcd9; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11pt; }
+  .legend { font-size: 8.4pt; color: var(--muted); margin-top: 5px; }
+  .chip { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.4pt; }
+  th { white-space: nowrap; text-align: left; font-weight: 600; color: var(--muted); font-size: 8.4pt; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 8px 5px 0; border-bottom: 1px solid var(--ink); }
+  td { padding: 3.6px 8px 3.6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.n, td.n { text-align: right; padding-right: 0; padding-left: 8px; font-variant-numeric: tabular-nums; }
+  tr.best td { background: var(--accent-soft); font-weight: 600; }
+  tr.best td:first-child { padding-left: 6px; }
+  .note { font-size: 8.4pt; color: var(--muted); margin-top: 5px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  ul { margin: 0; padding-left: 15px; }
+  li { margin-bottom: 3px; }
+  .case { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 8px 11px; font-size: 9.5pt; margin-top: 2px; }
+  .case b { color: var(--warn); }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.8pt; }
+  footer { margin-top: auto; border-top: 1px solid var(--line); padding-top: 7px; font-size: 8.4pt; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <h1>Invoice PDF Parser</h1>
+      <div class="tag">Results summary · Microsoft Agent Framework · .NET 10 · Azure AI Foundry</div>
+    </div>
+    <div class="who">
+      <b>Yurii Mochulskyi</b><br>
+      <a href="https://github.com/yuriimochulskyi/InvoicePDFParser">github.com/yuriimochulskyi/InvoicePDFParser</a><br>
+      yurii.mochulskyi@gmail.com
+    </div>
+  </header>
+
+  <p class="lead">
+    An AI-powered PDF invoice parser: any layout and language in, a typed invoice out, plus a
+    decision whether the result can be trusted or needs a person. The language model only <b>reads</b>; everything that
+    has to be exact, including that decision, is done by <b>code</b>.
+  </p>
+
+  <h2>How one invoice is processed</h2>
+  <div class="flow">
+    <div class="step code"><b>Upload</b>PDF check, size limit</div>
+    <div class="arrow">›</div>
+    <div class="step code"><b>Text</b>Text layer, or OCR for scans (Azure Document Intelligence)</div>
+    <div class="arrow">›</div>
+    <div class="step model"><b>Agent reads</b>The model extracts the fields and checks its own arithmetic by calling a tool</div>
+    <div class="arrow">›</div>
+    <div class="step code"><b>Code decides</b>Required fields, formats, totals, every amount present in the document</div>
+    <div class="arrow">›</div>
+    <div class="step code"><b>Result</b><span style="white-space:nowrap">Parsed</span> or <span style="white-space:nowrap">NeedsReview</span> with a reason</div>
+  </div>
+  <div class="legend"><span class="chip" style="background:var(--warn-soft);border:1px solid #ecd3b6;margin-left:0"></span>language model<span class="chip" style="background:var(--accent-soft);border:1px solid #bcdcd9"></span>deterministic code</div>
+
+  <h2>Measured on six models</h2>
+  <table>
+    <tr><th>Model</th><th>Where it runs</th><th class="n">Fields correct</th><th class="n">Decisions</th><th class="n">Median time</th><th class="n">Cost / 1,000 invoices</th></tr>
+    <tr class="best"><td>gpt-4.1-nano</td><td>Azure AI Foundry</td><td class="n">99%</td><td class="n">9 / 9</td><td class="n">2.9 s</td><td class="n">$0.61</td></tr>
+    <tr><td>gpt-5-nano</td><td>Azure AI Foundry</td><td class="n">100%</td><td class="n">9 / 9</td><td class="n">9.2 s</td><td class="n">$0.95</td></tr>
+    <tr><td>DeepSeek-V4-Flash</td><td>Azure AI Foundry</td><td class="n">100%</td><td class="n">9 / 9</td><td class="n">10.7 s</td><td class="n">$1.79</td></tr>
+    <tr><td>gpt-4.1-mini</td><td>Azure AI Foundry</td><td class="n">99%</td><td class="n">9 / 9</td><td class="n">4.7 s</td><td class="n">$2.33</td></tr>
+    <tr><td>gpt-5-mini</td><td>Azure AI Foundry</td><td class="n">100%</td><td class="n">9 / 9</td><td class="n">8.6 s</td><td class="n">$2.86</td></tr>
+    <tr><td>qwen3:8b</td><td>Local GPU (Ollama)</td><td class="n">100%</td><td class="n">9 / 9</td><td class="n">22.7 s</td><td class="n">$0</td></tr>
+  </table>
+  <div class="note">
+    Nine invoices in six languages (Ukrainian, German, English US and UK, Polish, Swiss German), among them a tampered total,
+    a hidden prompt injection and a scanned image. One run per model, 5 October 2026; Azure Global list prices of that day;
+    OCR pages billed separately. A smoke test, not a benchmark.
+  </div>
+
+  <h2>What the numbers say</h2>
+  <div class="cols">
+    <ul>
+      <li><b>The cheapest model is enough.</b> gpt-4.1-nano passes every check at $0.61 per 1,000 invoices and is also the fastest.</li>
+      <li><b>Quality comes from the pipeline, not the model.</b> Six models from three vendors land within one field of each other.</li>
+    </ul>
+    <ul>
+      <li><b>Reasoning models do not pay off here:</b> same result, up to four times the output tokens, three times slower.</li>
+      <li><b>No vendor lock-in:</b> a local model, OpenAI and DeepSeek deployments run through the same code.</li>
+    </ul>
+  </div>
+
+  <h2>Why the decision is made by code</h2>
+  <div class="case">
+    On the invoice with a <b>tampered total</b>, one cloud model changed the numbers so that the arithmetic worked out,
+    in two runs out of two, against an explicit instruction. The invoice would have passed as valid. It was stopped
+    because code requires every reported amount to exist in the document:
+    <code>amounts not found in the document text: total 1558.78</code>. The other five models reported the numbers
+    as printed, and the totals check sent the invoice to a person.
+  </div>
+
+  <h2>Engineering</h2>
+  <div class="cols">
+    <ul>
+      <li>Agent with typed tools and schema-constrained output on Microsoft Agent Framework.</li>
+      <li>79 automated tests that need no model, covering the agent loop and the HTTP API; CI on every commit.</li>
+    </ul>
+    <ul>
+      <li>Evaluation harness with safety gates: a document that must go to review may never come back as valid.</li>
+      <li>README explains each design decision by the failure that led to it, and lists what is not built yet.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <span>Evaluation run of 5 October 2026 on nine sample invoices. Full report: docs/evals/2026-10-05-model-comparison.md</span>
+    <span>MIT licence</span>
+  </footer>
+</div>
+</body>
+</html>
