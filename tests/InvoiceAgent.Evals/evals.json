@@ -15,8 +15,8 @@
       "Model": "gpt-4.1-mini",
       "Temperature": 0,
       "ReasoningEffort": null,
-      "InputPricePerM": 0.40,
-      "OutputPricePerM": 1.60,
+      "InputPricePerM": 0.4,
+      "OutputPricePerM": 1.6,
       "PricingNote": "Global Standard deployment; Data Zone would be $0.44 / $1.76"
     },
     {
@@ -25,10 +25,37 @@
       "Temperature": null,
       "ReasoningEffort": "Low",
       "InputPricePerM": 0.25,
-      "OutputPricePerM": 2.00,
+      "OutputPricePerM": 2.0,
       "PricingNote": "reasoning model: rejects temperature; reasoning tokens are billed as output"
+    },
+    {
+      "Provider": "AzureOpenAI",
+      "Model": "gpt-4.1-nano",
+      "Temperature": 0,
+      "ReasoningEffort": null,
+      "InputPricePerM": 0.1,
+      "OutputPricePerM": 0.4,
+      "PricingNote": "Global Standard deployment"
+    },
+    {
+      "Provider": "AzureOpenAI",
+      "Model": "gpt-5-nano",
+      "Temperature": null,
+      "ReasoningEffort": "Low",
+      "InputPricePerM": 0.05,
+      "OutputPricePerM": 0.4,
+      "PricingNote": "reasoning model: rejects temperature; reasoning tokens are billed as output"
+    },
+    {
+      "Provider": "AzureOpenAI",
+      "Model": "DeepSeek-V4-Flash",
+      "Temperature": 0,
+      "ReasoningEffort": null,
+      "InputPricePerM": 0.19,
+      "OutputPricePerM": 0.51,
+      "PricingNote": "third-party model served through the same Foundry endpoint and Chat Completions API (Global)"
     }
   ],
-  "PricesAsOf": "2026-10-04",
-  "PricingSource": "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
+  "PricesAsOf": "2026-10-05",
+  "PricingSource": "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/ and the Foundry Models pricing page (Global deployments)"
 }
