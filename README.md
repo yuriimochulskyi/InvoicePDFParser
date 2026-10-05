@@ -68,16 +68,19 @@ flowchart LR
     Svc -->|"id, status, reviewReason, invoice"| Client
 ```
 
-The API and the evals register the pipeline through the same `AddInvoiceAgent()` call, so the eval measures exactly
+The API and the evals register the pipeline through the same `AddInvoiceParser()` call, so the eval measures exactly
 the production code path.
 
 | Folder | Contents |
 |---|---|
-| `src/InvoiceAgent.Api/Agents` | agent, provider factory, options, review policy, processing pipeline, DI registration |
-| `src/InvoiceAgent.Api/Tools` | PDF store, text extraction and OCR fallback (`IPdfTextSource`), shared text layout, preflight, `ValidateTotals`, amount grounding |
-| `src/InvoiceAgent.Api/Models` | `InvoiceDto` (its `[Description]`s become the JSON schema) |
-| `src/InvoiceAgent.Api/Data` | EF Core + SQLite |
-| `tests/InvoiceAgent.Evals` | 79 deterministic tests (policy, samples, agent loop, OCR fallback, HTTP), the live-model eval, `evals.json` |
+| `src/InvoicePdfParser.Api/Agents` | the extraction agent, its two tools, the `IChatClient` factory |
+| `src/InvoicePdfParser.Api/Documents` | upload store, text layer reader, OCR fallback (`IPdfTextSource`, `IOcrEngine`), shared text layout, preflight |
+| `src/InvoicePdfParser.Api/Validation` | review policy, totals check, amount grounding: the deterministic rules |
+| `src/InvoicePdfParser.Api/Pipeline` | `InvoiceProcessingService`: store, preflight, agent, review, persist |
+| `src/InvoicePdfParser.Api/Configuration` | `AiOptions` with startup validation, `AddInvoiceParser()` registration |
+| `src/InvoicePdfParser.Api/Models` | `InvoiceDto` (its `[Description]`s become the JSON schema), the API contract |
+| `src/InvoicePdfParser.Api/Data`, `Controllers` | EF Core + SQLite; the HTTP endpoints |
+| `tests/InvoicePdfParser.Tests` | 79 deterministic tests (policy, samples, agent loop, OCR fallback, HTTP), the live-model eval, `evals.json` |
 | `samples/invoices` | 9 PDFs, their HTML sources, `*.expected.json` with the expected status |
 | `docs/evals` | committed eval reports |
 
@@ -93,7 +96,7 @@ ollama pull qwen3:8b
 [Environment]::SetEnvironmentVariable('OLLAMA_CONTEXT_LENGTH', '8192', 'User')
 # then quit Ollama from the tray and start it again; `ollama ps` should show CONTEXT 8192 and 100% GPU
 
-dotnet run --project src/InvoiceAgent.Api --launch-profile http
+dotnet run --project src/InvoicePdfParser.Api --launch-profile http
 ```
 
 Swagger UI: http://localhost:5185/swagger
@@ -141,7 +144,7 @@ Widget X"). Splitting the turns keeps tool calling free and still gives a schema
 one extra round trip. Azure allows tools and a schema together, but the two phases are kept for identical behaviour
 across providers, and `ToolMode.None` makes "turn 2 only formats" true there too.
 
-The agent depends on `Microsoft.Extensions.AI.IChatClient`, not on a provider SDK type. `AddInvoiceAgent()` builds
+The agent depends on `Microsoft.Extensions.AI.IChatClient`, not on a provider SDK type. `AddInvoiceParser()` builds
 the client pipeline (`UseFunctionInvocation` with hard caps) and hands it to `ChatClientAgent` with
 `UseProvidedChatClientAsIs`, so the framework does not wrap it in a second, uncapped loop. In tests the same pipeline
 runs over a `ScriptedChatClient`.
@@ -249,7 +252,7 @@ and exposes it as `IChatClient`. Ollama is reached through its `/v1` endpoint, a
 through `/openai/v1/`.
 
 ```powershell
-cd src/InvoiceAgent.Api
+cd src/InvoicePdfParser.Api
 dotnet user-secrets set "Ai:Provider" "AzureOpenAI"
 dotnet user-secrets set "Ai:AzureOpenAI:Endpoint" "https://<resource>.services.ai.azure.com/"
 dotnet user-secrets set "Ai:AzureOpenAI:Deployment" "gpt-4.1-mini"
@@ -290,7 +293,7 @@ Four levels:
 1. **Deterministic tests** (`ReviewPolicyTests`, `SampleIntegrityTests`): the review policy, totals, grounding in several locales, the preflight, the OCR fallback with a fake engine (including an OCR failure and a crooked scan), and the integrity of every `expected.json` (its arithmetic, its identifiers in the PDF text, and that the policy over the ground truth yields the expected status).
 2. **Agent-loop tests without a model** (`AgentLoopTests`): a `ScriptedChatClient` plays the LLM; the function-invocation loop, both tools, the real PDF and the policy are real. They pin the two-turn contract (tools and no schema first, schema and `ToolMode.None` last), usage aggregation, "no JSON → NeedsReview, not 503", "transport failure → 503", "never read the PDF → NeedsReview" and the iteration cap on a model that keeps calling tools.
 3. **HTTP tests** (`ApiTests`): the real ASP.NET Core pipeline through `WebApplicationFactory`, with the scripted client and in-memory SQLite. They pin 201 + `Location`, the response shape, `application/problem+json` for 400/404/503, "scan → NeedsReview with zero tokens", "503 stores nothing" and the typed contract in Swagger. Their first run caught a real defect: a class-level `[Produces("application/json")]` was overriding the ProblemDetails content type.
-4. **Live eval** (`ExtractionEvals`): every PDF through the real pipeline for every model in `tests/InvoiceAgent.Evals/evals.json`, scored against `expected.json`. It writes `TestResults/eval-report.md`; snapshots are committed under `docs/evals/`.
+4. **Live eval** (`ExtractionEvals`): every PDF through the real pipeline for every model in `tests/InvoicePdfParser.Tests/evals.json`, scored against `expected.json`. It writes `TestResults/eval-report.md`; snapshots are committed under `docs/evals/`.
 
 Scoring: strings, dates and currency exact (trimmed, case-insensitive); amounts within 0.01; line-item count must
 match, then each line amount. Gates, per model:
