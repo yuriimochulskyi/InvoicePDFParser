@@ -1,12 +1,13 @@
-# Invoice Agent
+# Invoice PDF Parser
 
-[![CI](https://github.com/yuriimochulskyi/InvoiceAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/yuriimochulskyi/InvoiceAgent/actions/workflows/ci.yml)
+[![CI](https://github.com/yuriimochulskyi/InvoicePDFParser/actions/workflows/ci.yml/badge.svg)](https://github.com/yuriimochulskyi/InvoicePDFParser/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-An AI agent that turns PDF invoices of any layout and language into a typed `InvoiceDto`, plus a deterministic
-decision whether the result can be trusted (`Parsed`) or needs a human (`NeedsReview`). Built on
-**Microsoft Agent Framework**, **Microsoft.Extensions.AI** and **.NET 10**. The same code runs on a local model
+An AI-powered parser that turns PDF invoices of any layout and language into a typed `InvoiceDto`, plus a
+deterministic decision whether the result can be trusted (`Parsed`) or needs a human (`NeedsReview`). Inside it is
+an agent on **Microsoft Agent Framework** and **Microsoft.Extensions.AI** (.NET 10): the model reads the document and
+checks its own arithmetic through tools, and code decides the outcome. The same code runs on a local model
 (Ollama, `qwen3:8b`) and on Azure OpenAI; both are measured below.
 
 ## Results at a glance
