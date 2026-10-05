@@ -24,7 +24,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Demo project: create the schema on startup instead of shipping migrations.
+// The schema is created on startup; EF migrations are on the roadmap.
 using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<InvoiceDbContext>().Database.EnsureCreated();
 

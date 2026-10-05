@@ -32,7 +32,7 @@ deterministic review) rather than from the model itself. The cheapest model that
 is also the fastest. Prices are Azure Global list prices as of 2026-10-05; see
 [Model comparison and cost](#model-comparison-and-cost).
 
-What the project demonstrates:
+Highlights:
 
 - **Agent with typed tools** on Microsoft Agent Framework: the model reads the PDF and checks its own arithmetic through tools.
 - **Structured output:** the final answer is constrained to the `InvoiceDto` JSON schema.
@@ -370,28 +370,23 @@ model on nine samples gives a direction, not a benchmark.
 
 ## Design notes
 
-- **Why `ExtractPdfText` is still a tool.** Reading is always the first step, and since the preflight and OCR the text is already extracted by the pipeline before the model runs; the tool only hands it over. So there is no agentic freedom in it, and in production the text would go straight into the prompt and save a round trip. It is kept as a tool here to demonstrate tool calling end to end, to keep a seam for page-wise reading of long documents, and because its presence in `ToolCalls` is the signal the policy checks. The cost is one round trip and two guards (the id comparison and the "did not read" rule). The genuinely agentic part is the self-check loop around `ValidateTotals`.
+- **Why `ExtractPdfText` is still a tool.** Reading is always the first step, and since the preflight and OCR the text is already extracted by the pipeline before the model runs; the tool only hands it over. So there is no agentic freedom in it, and in production the text would go straight into the prompt and save a round trip. It is kept as a tool as a seam for page-wise reading of long documents, and because its presence in `ToolCalls` is the signal the policy checks. The cost is one round trip and two guards (the id comparison and the "did not read" rule). The genuinely agentic part is the self-check loop around `ValidateTotals`.
 - **Why the agent is built per request.** `InvoiceTools` is instantiated per run, bound to that run's document, so the run can record exactly which tools it called. A singleton `AIAgent` with stateless tools and `FunctionCallContent` read back from `AgentResponse.Messages` is the idiomatic alternative and the next refactoring.
 - **Why `ValidateTotals` is both a tool and a gate.** As a tool it lets the model correct a misread (visible in the logs: the two-page invoice was first summed with the carried-forward subtotal, the check failed, the model found the real total). As a gate it protects against a model that bent the numbers. Two roles, one implementation.
 - **Why the LLM is used at all.** A template parser handles known layouts; these nine come in six layouts, languages and number formats, and real invoice streams add a new layout per vendor. The model reads; everything that must be exact is code.
 
-## What transfers to an email support agent
+## Beyond invoices
 
-The second task this project was shaped for. The same patterns apply directly: the email body is untrusted input
+The same patterns carry over to other agents that act on third-party text, for example an email support agent: the
+email body is untrusted input
 delimited as data; tools are the only side-effect boundary and `SendEmail` would be wrapped for human approval
 (`ApprovalRequiredAIFunction`); the outcome (answer / escalate) is decided by code over a schema-constrained draft;
 evals with adversarial mails gate regressions; RAG over the policy and ticket base supplies grounded context; MCP
 exposes platform tools (CRM, order status) to the agent; idempotency by message id protects against redelivery.
 
-## How this was built
-
-Pair-programmed with Claude Code over about a week. The architecture, the two-turn design, the decision to put
-validation in code and every failure analysis in this README came from running the pipeline and reading the logs; the
-commit history records each change with its reason.
-
 ## Roadmap
 
-Deliberately out of scope for a prototype, each with its intended design:
+Not built yet, each with its intended design:
 
 - **OCR quality:** `prebuilt-layout` for real table structure instead of rebuilt rows, per-word confidence as a review signal, a local engine behind `IOcrEngine` for documents that may not leave the machine.
 - **Async processing:** `202 Accepted` + `Location`, statuses `Queued → Processing → Parsed/NeedsReview/Failed`; first an in-process `Channel<Guid>` + `BackgroundService`, then RabbitMQ (MassTransit) or Azure Service Bus with the same handler; idempotency by content hash.
