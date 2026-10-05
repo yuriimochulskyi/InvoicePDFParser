@@ -1,6 +1,6 @@
 # Invoice Agent
 
-[![CI](https://github.com/yuriimochulskyi/InvoiceAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/yuriimochulskyi/InvoiceAgent/actions/workflows/ci.yml)
+[![CI](https://github.com/yuriimochulskyi/InvoicePDFParser/actions/workflows/ci.yml/badge.svg)](https://github.com/yuriimochulskyi/InvoicePDFParser/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
