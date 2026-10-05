@@ -1,9 +1,40 @@
 {
-  "expectedStatus": "NeedsReview",
-  "reasonContains": "no text layer",
+  "expectedStatus": "Parsed",
+  "reasonContains": null,
   "tags": [
     "scan",
     "de"
   ],
-  "invoice": null
+  "invoice": {
+    "vendorName": "Müller Webdesign GmbH",
+    "vendorTaxId": "DE287654321",
+    "invoiceNumber": "RE-2026-0147",
+    "invoiceDate": "2026-08-15",
+    "dueDate": "2026-09-14",
+    "currency": "EUR",
+    "lineItems": [
+      {
+        "description": "Webentwicklung (Stunden)",
+        "quantity": 12,
+        "unitPrice": 85.0,
+        "amount": 1020.0
+      },
+      {
+        "description": "Hosting-Paket Business (12 Monate)",
+        "quantity": 1,
+        "unitPrice": 240.0,
+        "amount": 240.0
+      },
+      {
+        "description": "SSL-Zertifikat",
+        "quantity": 1,
+        "unitPrice": 49.9,
+        "amount": 49.9
+      }
+    ],
+    "subtotal": 1309.9,
+    "taxAmount": 248.88,
+    "discountAmount": null,
+    "total": 1558.78
+  }
 }

@@ -38,9 +38,9 @@ public sealed class InvoiceProcessingService(
         ExtractionRun run;
         try
         {
-            var preflight = DocumentPreflight.Check(textSource.Extract(fileId), options.MaxDocumentChars);
+            var preflight = DocumentPreflight.Check(await textSource.ExtractAsync(fileId, ct), options.MaxDocumentChars);
             run = preflight.Ok
-                ? await agent.RunAsync(fileId, ct)
+                ? await agent.RunAsync(fileId, preflight.Document, ct)
                 : new ExtractionRun(null, preflight.Document.Text, null, model.Provider, model.Model, 0, 0, sw.ElapsedMilliseconds, [], preflight.ReviewReason);
         }
         catch

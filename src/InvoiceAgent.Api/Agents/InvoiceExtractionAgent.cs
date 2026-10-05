@@ -24,7 +24,6 @@ public sealed class InvoiceExtractionAgent(
     IChatClient chatClient,
     ChatClientFactory.ModelInfo model,
     AiOptions options,
-    IPdfTextSource pdf,
     ILoggerFactory loggerFactory)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<InvoiceExtractionAgent>();
@@ -52,12 +51,12 @@ public sealed class InvoiceExtractionAgent(
     /// <summary>The full system prompt; evals hash it so a report can be tied to the prompt that produced it.</summary>
     public static string Instructions => SystemInstructions + Rules;
 
-    public async Task<ExtractionRun> RunAsync(string fileId, CancellationToken ct = default)
+    public async Task<ExtractionRun> RunAsync(string fileId, PdfText document, CancellationToken ct = default)
     {
         var callerCt = ct;
         var runTimeout = TimeSpan.FromSeconds(options.RunTimeoutSeconds);
         // Tools are created per run so we can see exactly what this run called.
-        var tools = new InvoiceTools(pdf, _logger);
+        var tools = new InvoiceTools(fileId, document, _logger);
         AIAgent agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
         {
             Name = "InvoiceExtractor",

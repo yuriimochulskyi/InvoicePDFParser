@@ -16,7 +16,8 @@ public static class DocumentPreflight
     public static PreflightResult Check(PdfText document, int maxDocumentChars)
     {
         if (!document.HasTextLayer)
-            return new(document, $"no text layer: scanned or image-only PDF ({document.Pages} page(s)); OCR is not configured");
+            return new(document, $"no text layer: scanned or image-only PDF ({document.Pages} page(s)); " +
+                (document.OcrError is { } error ? $"OCR failed ({error})" : "OCR is not configured"));
 
         if (document.Text.Length > maxDocumentChars)
             return new(document, $"document too long: {document.Text.Length} characters exceed the configured limit of {maxDocumentChars} (Ai:MaxDocumentChars); it would not fit the model context");

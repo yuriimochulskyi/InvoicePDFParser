@@ -30,7 +30,8 @@ public class AgentLoopTests
         await using var pdf = File.OpenRead(DePdf);
         var fileId = await store.SaveAsync(pdf, TestContext.Current.CancellationToken);
 
-        var run = await scope.ServiceProvider.GetRequiredService<InvoiceExtractionAgent>().RunAsync(fileId, TestContext.Current.CancellationToken);
+        var document = await scope.ServiceProvider.GetRequiredService<IPdfTextSource>().ExtractAsync(fileId, TestContext.Current.CancellationToken);
+        var run = await scope.ServiceProvider.GetRequiredService<InvoiceExtractionAgent>().RunAsync(fileId, document, TestContext.Current.CancellationToken);
         var (status, reason) = InvoiceReviewPolicy.Decide(run);
         return (run, client, new(status, reason));
     }

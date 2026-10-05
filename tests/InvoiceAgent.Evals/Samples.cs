@@ -17,6 +17,10 @@ public sealed record ExpectedCase(
     InvoiceDto? Invoice)
 {
     public bool Has(string tag) => Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A scan can only be read when OCR is configured; without it the correct outcome is review.</summary>
+    public InvoiceStatus StatusWhen(bool ocrAvailable) =>
+        Has("scan") && !ocrAvailable ? InvoiceStatus.NeedsReview : ExpectedStatus;
 }
 
 public sealed record Sample(string Name, string PdfPath, ExpectedCase Expected);

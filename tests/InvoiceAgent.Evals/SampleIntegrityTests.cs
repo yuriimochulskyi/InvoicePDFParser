@@ -10,6 +10,7 @@ public class SampleIntegrityTests
 {
     public static TheoryData<string> Names => new(Samples.All().Select(s => s.Name));
     public static TheoryData<string> NamesWithInvoice => new(Samples.All().Where(s => s.Expected.Invoice is not null).Select(s => s.Name));
+    public static TheoryData<string> NamesWithTextLayer => new(Samples.All().Where(s => !s.Expected.Has("scan")).Select(s => s.Name));
 
     [Fact]
     public void EveryPdfHasExpectedJson_AndViceVersa()
@@ -42,7 +43,7 @@ public class SampleIntegrityTests
 
     /// <summary>The policy over the ground truth itself must produce the expected status (no model involved).</summary>
     [Theory]
-    [MemberData(nameof(NamesWithInvoice))]
+    [MemberData(nameof(NamesWithTextLayer))]
     public async Task GroundTruth_GetsExpectedStatusFromPolicy(string name)
     {
         var sample = Samples.All().Single(s => s.Name == name);
@@ -56,7 +57,7 @@ public class SampleIntegrityTests
     }
 
     [Theory]
-    [MemberData(nameof(NamesWithInvoice))]
+    [MemberData(nameof(NamesWithTextLayer))]
     public async Task PdfText_ContainsExpectedIdentifiers(string name)
     {
         var sample = Samples.All().Single(s => s.Name == name);
@@ -73,14 +74,14 @@ public class SampleIntegrityTests
     [MemberData(nameof(Names))]
     public async Task Preflight_MatchesExpectedStatus(string name)
     {
-        // Text-layer samples pass the preflight; the scan is stopped before any model call.
+        // Text-layer samples pass the preflight; without OCR the scan is stopped before any model call.
         var sample = Samples.All().Single(s => s.Name == name);
         var result = DocumentPreflight.Check(await ExtractAsync(sample), new AiOptions().MaxDocumentChars);
 
         if (sample.Expected.Has("scan"))
         {
             Assert.False(result.Ok);
-            Assert.Contains(sample.Expected.ReasonContains!, result.ReviewReason);
+            Assert.Contains("no text layer", result.ReviewReason);
         }
         else
         {

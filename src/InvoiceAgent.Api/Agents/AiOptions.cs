@@ -22,6 +22,9 @@ public sealed class AiOptions
     public OllamaOptions Ollama { get; set; } = new();
     public AzureOpenAIOptions AzureOpenAI { get; set; } = new();
 
+    /// <summary>Optional OCR for scanned PDFs. Without it a scan goes to review untouched.</summary>
+    public DocumentIntelligenceOptions DocumentIntelligence { get; set; } = new();
+
     /// <summary>Generation settings of the selected provider.</summary>
     public GenerationOptions Generation => Provider == AiProvider.AzureOpenAI ? AzureOpenAI : Ollama;
 
@@ -55,6 +58,10 @@ public sealed class AiOptions
             if (string.IsNullOrWhiteSpace(AzureOpenAI.Deployment))
                 errors.Add("Ai:AzureOpenAI:Deployment must be set to the deployment name.");
         }
+        if (DocumentIntelligence.IsConfigured && !Uri.TryCreate(DocumentIntelligence.Endpoint, UriKind.Absolute, out _))
+            errors.Add("Ai:DocumentIntelligence:Endpoint must be an absolute URL.");
+        if (!string.IsNullOrWhiteSpace(DocumentIntelligence.Endpoint) != !string.IsNullOrWhiteSpace(DocumentIntelligence.ApiKey))
+            errors.Add("Ai:DocumentIntelligence needs both Endpoint and ApiKey, or neither.");
         return errors;
     }
 
@@ -90,5 +97,13 @@ public sealed class AiOptions
         public string Endpoint { get; set; } = "";
         public string Deployment { get; set; } = "gpt-4.1-mini";
         public string ApiKey { get; set; } = "";
+    }
+
+    public sealed class DocumentIntelligenceOptions
+    {
+        public string Endpoint { get; set; } = "";
+        public string ApiKey { get; set; } = "";
+
+        public bool IsConfigured => !string.IsNullOrWhiteSpace(Endpoint) && !string.IsNullOrWhiteSpace(ApiKey);
     }
 }

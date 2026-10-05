@@ -168,7 +168,7 @@ public class ReviewPolicyTests
     [Fact]
     public void ValidateTotalsTool_StopsAfterThreeChecks()
     {
-        var tools = new InvoiceTools(new NoDocument());
+        var tools = new InvoiceTools();
         for (var i = 0; i < 3; i++)
             Assert.StartsWith("mismatch", tools.ValidateTotals([new(1, 10, 10)], null, 2, null, 13));
         Assert.StartsWith("Check budget exhausted", tools.ValidateTotals([new(1, 10, 10)], null, 2, null, 13));
@@ -177,15 +177,9 @@ public class ReviewPolicyTests
     [Fact]
     public void ValidateTotalsTool_ReportsMismatch()
     {
-        var tools = new InvoiceTools(new NoDocument());
+        var tools = new InvoiceTools();
         var result = tools.ValidateTotals([new(1, 10, 10)], subtotal: null, taxAmount: 2, discountAmount: null, total: 13);
         Assert.StartsWith("mismatch", result);
         Assert.Equal(["ValidateTotals"], tools.Calls);
-    }
-
-    /// <summary>ValidateTotals never touches the document; fail loudly if a test makes it.</summary>
-    private sealed class NoDocument : IPdfTextSource
-    {
-        public PdfText Extract(string fileId) => throw new InvalidOperationException("No document in this test.");
     }
 }

@@ -32,6 +32,7 @@ public sealed record EvalModel(
             MaxDocumentChars = baseOptions.MaxDocumentChars,
             Ollama = new() { Endpoint = baseOptions.Ollama.Endpoint, Model = baseOptions.Ollama.Model },
             AzureOpenAI = new() { Endpoint = baseOptions.AzureOpenAI.Endpoint, ApiKey = baseOptions.AzureOpenAI.ApiKey, Deployment = baseOptions.AzureOpenAI.Deployment },
+            DocumentIntelligence = baseOptions.DocumentIntelligence,
         };
         if (Provider == AiProvider.Ollama) o.Ollama.Model = Model; else o.AzureOpenAI.Deployment = Model;
         o.Generation.Temperature = Temperature;

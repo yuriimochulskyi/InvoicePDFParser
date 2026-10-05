@@ -1,3 +1,5 @@
+using Azure;
+using Azure.AI.DocumentIntelligence;
 using InvoiceAgent.Api.Tools;
 using Microsoft.Extensions.AI;
 
@@ -40,7 +42,14 @@ public static class ServiceCollectionExtensions
             })
             .Build());
         services.AddSingleton(new PdfFileStore(uploadsPath));
-        services.AddSingleton<IPdfTextSource, PdfTextExtractor>();
+        services.AddSingleton<PdfTextExtractor>();
+        if (options.DocumentIntelligence.IsConfigured)
+            services.AddSingleton<IOcrEngine>(new AzureDocumentIntelligenceOcr(new DocumentIntelligenceClient(
+                new Uri(options.DocumentIntelligence.Endpoint), new AzureKeyCredential(options.DocumentIntelligence.ApiKey))));
+        // Text layer first, OCR for scans when an engine is registered.
+        services.AddSingleton<IPdfTextSource>(sp => new OcrFallbackTextSource(
+            sp.GetRequiredService<PdfTextExtractor>(), sp.GetRequiredService<PdfFileStore>(),
+            sp.GetRequiredService<ILogger<OcrFallbackTextSource>>(), sp.GetService<IOcrEngine>()));
         services.AddScoped<InvoiceExtractionAgent>();
         services.AddScoped<InvoiceProcessingService>();
         return services;
