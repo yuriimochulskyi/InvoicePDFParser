@@ -8,7 +8,7 @@ An AI-powered parser that turns PDF invoices of any layout and language into a t
 deterministic decision whether the result can be trusted (`Parsed`) or needs a human (`NeedsReview`). Inside it is
 an agent on **Microsoft Agent Framework** and **Microsoft.Extensions.AI** (.NET 10): the model reads the document and
 checks its own arithmetic through tools, and code decides the outcome. The same code runs on a local model
-(Ollama, `qwen3:8b`) and on Azure OpenAI; both are measured below.
+(Ollama) and on five deployments in Azure AI Foundry; all six are measured below.
 
 ## Results at a glance
 
@@ -86,7 +86,8 @@ the production code path.
 
 ## Quick start
 
-Prerequisites: .NET 10 SDK and [Ollama](https://ollama.com) with about 6.5 GB of VRAM for `qwen3:8b`.
+Prerequisites: .NET 10 SDK and [Ollama](https://ollama.com) with about 6.5 GB of VRAM for `qwen3:8b`. To run against
+Azure instead, skip the Ollama steps and see [Switching providers](#switching-providers).
 
 ```powershell
 ollama pull qwen3:8b
@@ -133,7 +134,7 @@ is the bulk of the payload and may hold personal data.
 One request is **two turns in one `AgentSession`**:
 
 1. **Agentic turn (no response format).**
-   - The model calls `ExtractPdfText(fileId)`. It gets the page text wrapped in `<document>…</document>`, with table cells separated by ` | `.
+   - The model calls `ExtractPdfText(fileId)`. It gets the document text (read from the text layer, or recognised by OCR for a scan) wrapped in `<document>…</document>`, with table cells separated by ` | `.
    - It passes the amounts it read to `ValidateTotals(lineItems[], subtotal, taxAmount, discountAmount, total)`. The tool checks `quantity × unitPrice = amount` per line, `Σ lines = subtotal` and `Σ lines + tax − discount = total`, all within 0.01, and answers `ok` or `mismatch: …`.
    - On a mismatch the model re-reads the text and tries again. The tool stops answering after 3 checks; the `FunctionInvokingChatClient` stops the loop after 8 iterations regardless.
 2. **Formatting turn.** `agent.RunAsync<InvoiceDto>()` with `ToolMode.None` asks for the final answer under the JSON schema. The model only formats what is already in the conversation.
@@ -141,8 +142,8 @@ One request is **two turns in one `AgentSession`**:
 Why two turns: with the schema set from the first turn, Ollama constrains *every* turn to the schema, so the model
 cannot emit a tool call. On the very first run it skipped the PDF and invented a complete invoice ("ACME Corp,
 Widget X"). Splitting the turns keeps tool calling free and still gives a schema-guaranteed final object; the cost is
-one extra round trip. Azure allows tools and a schema together, but the two phases are kept for identical behaviour
-across providers, and `ToolMode.None` makes "turn 2 only formats" true there too.
+one extra round trip. The two phases are kept for every model, so all six behave the same way, and `ToolMode.None`
+makes "turn 2 only formats" true even where a provider would accept tools next to a schema.
 
 The agent depends on `Microsoft.Extensions.AI.IChatClient`, not on a provider SDK type. `AddInvoiceParser()` builds
 the client pipeline (`UseFunctionInvocation` with hard caps) and hands it to `ChatClientAgent` with
@@ -154,7 +155,7 @@ Settings that mattered, each found by running the pipeline:
 | Setting | Why |
 |---|---|
 | `Reasoning = None` for qwen3 | qwen3 "thinks" by default: 105 s → 11 s per invoice with no loss in accuracy. `/no_think` in the prompt did not disable it; `ChatOptions.Reasoning` did. |
-| `Temperature = 0` where the model accepts it | At default temperature one run dropped two digits from a VAT ID. Reasoning deployments (`gpt-5-mini`) reject the parameter, so it is per-provider configuration (`Ai:AzureOpenAI:Temperature: null`). |
+| `Temperature = 0` where the model accepts it | At default temperature one run dropped two digits from a VAT ID. Reasoning deployments (`gpt-5-mini`, `gpt-5-nano`) reject the parameter with HTTP 400, so it is configuration per model (`Temperature: null`), not a branch in code. |
 | Typed numeric parameters on `ValidateTotals` | The first version took an `invoiceJson` string. The model sent `"27" IPS Monitor"` unescaped three times in a row and invented field names (`qty`, `net`). A typed signature gives the tool call its own JSON schema and has no strings to break. |
 | Column-aware text extraction | Plain PdfPig text turned a row into `1 8 500,00 8 500,00`. Is that 1 × 8 500 or 18 × 500? The model read unitPrice 500. |
 | Short `fileId`s, compared not resolved | The model once mistyped a 32-character GUID. The id comes back from the LLM, so the tool only compares it with the id of the run's document; it never becomes a path. |
@@ -247,9 +248,10 @@ below.
 
 ## Switching providers
 
-Both providers speak the OpenAI Chat Completions protocol, so `ChatClientFactory` builds one `OpenAI.OpenAIClient`
-and exposes it as `IChatClient`. Ollama is reached through its `/v1` endpoint, an Azure OpenAI or Foundry resource
-through `/openai/v1/`.
+Every model here is reached through the OpenAI Chat Completions protocol, so `ChatClientFactory` builds one
+`OpenAI.OpenAIClient` and exposes it as `IChatClient`. Ollama is reached through its `/v1` endpoint, a Foundry
+resource through `/openai/v1/`; that one endpoint serves the OpenAI deployments and the DeepSeek model alike, so
+switching between them is a change of the deployment name.
 
 ```powershell
 cd src/InvoicePdfParser.Api
@@ -368,8 +370,8 @@ model on nine samples gives a direction, not a benchmark.
 
 ## Design notes
 
-- **Why `ExtractPdfText` is a tool and not code before the model.** Reading is always the first step, so there is no agentic freedom in it; in production the text would go straight into the prompt and save a round trip. It is kept as a tool here to demonstrate tool calling end to end, to keep a seam for page-wise reading, and because its presence in `ToolCalls` is the grounding signal the policy checks. The cost is one round trip and three guards (short ids, regex validation, the "did not read" rule).
-- **Why the agent is built per request.** `InvoiceTools` is instantiated per run so the run can record exactly which tools it called and keep the raw text for grounding. A singleton `AIAgent` with stateless tools and `FunctionCallContent` read back from `AgentResponse.Messages` is the idiomatic alternative and the next refactoring.
+- **Why `ExtractPdfText` is still a tool.** Reading is always the first step, and since the preflight and OCR the text is already extracted by the pipeline before the model runs; the tool only hands it over. So there is no agentic freedom in it, and in production the text would go straight into the prompt and save a round trip. It is kept as a tool here to demonstrate tool calling end to end, to keep a seam for page-wise reading of long documents, and because its presence in `ToolCalls` is the signal the policy checks. The cost is one round trip and two guards (the id comparison and the "did not read" rule). The genuinely agentic part is the self-check loop around `ValidateTotals`.
+- **Why the agent is built per request.** `InvoiceTools` is instantiated per run, bound to that run's document, so the run can record exactly which tools it called. A singleton `AIAgent` with stateless tools and `FunctionCallContent` read back from `AgentResponse.Messages` is the idiomatic alternative and the next refactoring.
 - **Why `ValidateTotals` is both a tool and a gate.** As a tool it lets the model correct a misread (visible in the logs: the two-page invoice was first summed with the carried-forward subtotal, the check failed, the model found the real total). As a gate it protects against a model that bent the numbers. Two roles, one implementation.
 - **Why the LLM is used at all.** A template parser handles known layouts; these nine come in six layouts, languages and number formats, and real invoice streams add a new layout per vendor. The model reads; everything that must be exact is code.
 
@@ -383,13 +385,13 @@ exposes platform tools (CRM, order status) to the agent; idempotency by message 
 
 ## How this was built
 
-Pair-programmed with Claude Code over three days. The architecture, the two-turn design, the decision to put
+Pair-programmed with Claude Code over about a week. The architecture, the two-turn design, the decision to put
 validation in code and every failure analysis in this README came from running the pipeline and reading the logs; the
 commit history records each change with its reason.
 
 ## Roadmap
 
-Deliberately out of scope for a weekend, each with its intended design:
+Deliberately out of scope for a prototype, each with its intended design:
 
 - **OCR quality:** `prebuilt-layout` for real table structure instead of rebuilt rows, per-word confidence as a review signal, a local engine behind `IOcrEngine` for documents that may not leave the machine.
 - **Async processing:** `202 Accepted` + `Location`, statuses `Queued → Processing → Parsed/NeedsReview/Failed`; first an in-process `Channel<Guid>` + `BackgroundService`, then RabbitMQ (MassTransit) or Azure Service Bus with the same handler; idempotency by content hash.
