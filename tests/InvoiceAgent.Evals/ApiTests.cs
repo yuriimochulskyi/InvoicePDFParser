@@ -61,29 +61,14 @@ public sealed class ApiTests : IDisposable
         return new MultipartFormDataContent { { file, "file", fileName } };
     }
 
+    private string[] StoredUploads() => Directory.Exists(_uploads) ? Directory.GetFiles(_uploads) : [];
+
     private static byte[] Sample(string name) => File.ReadAllBytes(Samples.All().Single(s => s.Name == name).PdfPath);
-
-    private static readonly Func<IReadOnlyList<ChatMessage>, ChatOptions?, ChatMessage> ReadPdf =
-        (messages, options) =>
-        {
-            var text = messages.Last(m => m.Role == ChatRole.User).Text;
-            var start = text.IndexOf('"') + 1;
-            return ScriptedChatClient.ToolCall("ExtractPdfText", new { fileId = text[start..text.IndexOf('"', start)] })(messages, options);
-        };
-
-    private const string DeInvoiceJson = """
-        {"vendorName":"Müller Webdesign GmbH","vendorTaxId":"DE287654321","invoiceNumber":"RE-2026-0147",
-         "invoiceDate":"2026-08-15","dueDate":"2026-09-14","currency":"EUR",
-         "lineItems":[{"description":"Webentwicklung (Stunden)","quantity":12,"unitPrice":85.00,"amount":1020.00},
-                      {"description":"Hosting-Paket Business (12 Monate)","quantity":1,"unitPrice":240.00,"amount":240.00},
-                      {"description":"SSL-Zertifikat","quantity":1,"unitPrice":49.90,"amount":49.90}],
-         "subtotal":1309.90,"taxAmount":248.88,"discountAmount":null,"total":1558.78}
-        """;
 
     [Fact]
     public async Task Post_ValidInvoice_Returns201_WithLocation_AndGetReturnsTheSameRecord()
     {
-        var client = CreateClient(ReadPdf, ScriptedChatClient.Text("done"), ScriptedChatClient.Text(DeInvoiceJson));
+        var client = CreateClient(ScriptedChatClient.ReadPdf, ScriptedChatClient.Text("done"), ScriptedChatClient.Text(ScriptedChatClient.GermanInvoiceJson));
         var ct = TestContext.Current.CancellationToken;
 
         var post = await client.PostAsync("/api/invoices", Upload(Sample("02-de-rechnung"), "02-de-rechnung.pdf"), ct);
@@ -132,6 +117,7 @@ public sealed class ApiTests : IDisposable
         var problem = (await post.Content.ReadFromJsonAsync<ProblemDetails>(Json, TestContext.Current.CancellationToken))!;
         Assert.Equal("Invalid upload", problem.Title);
         Assert.Contains(expectedDetail, problem.Detail);
+        Assert.Empty(StoredUploads()); // a rejected file is not kept
     }
 
     [Fact]
@@ -146,6 +132,7 @@ public sealed class ApiTests : IDisposable
 
         await using var db = new InvoiceDbContext(new DbContextOptionsBuilder<InvoiceDbContext>().UseSqlite(_connection).Options);
         Assert.Empty(db.Invoices);
+        Assert.Empty(StoredUploads());
     }
 
     [Fact]

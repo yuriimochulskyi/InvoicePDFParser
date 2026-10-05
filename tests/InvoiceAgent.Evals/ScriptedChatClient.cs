@@ -25,6 +25,24 @@ public sealed class ScriptedChatClient(params Func<IReadOnlyList<ChatMessage>, C
     public static Func<IReadOnlyList<ChatMessage>, ChatOptions?, ChatMessage> Throw(Exception ex) =>
         (_, _) => throw ex;
 
+    /// <summary>Calls ExtractPdfText with the fileId quoted in the user's request, as a real model would.</summary>
+    public static Func<IReadOnlyList<ChatMessage>, ChatOptions?, ChatMessage> ReadPdf { get; } = (messages, options) =>
+    {
+        var text = messages.Last(m => m.Role == ChatRole.User).Text;
+        var start = text.IndexOf('"') + 1;
+        return ToolCall("ExtractPdfText", new { fileId = text[start..text.IndexOf('"', start)] })(messages, options);
+    };
+
+    /// <summary>The correct extraction of samples/invoices/02-de-rechnung.pdf.</summary>
+    public const string GermanInvoiceJson = """
+        {"vendorName":"Müller Webdesign GmbH","vendorTaxId":"DE287654321","invoiceNumber":"RE-2026-0147",
+         "invoiceDate":"2026-08-15","dueDate":"2026-09-14","currency":"EUR",
+         "lineItems":[{"description":"Webentwicklung (Stunden)","quantity":12,"unitPrice":85.00,"amount":1020.00},
+                      {"description":"Hosting-Paket Business (12 Monate)","quantity":1,"unitPrice":240.00,"amount":240.00},
+                      {"description":"SSL-Zertifikat","quantity":1,"unitPrice":49.90,"amount":49.90}],
+         "subtotal":1309.90,"taxAmount":248.88,"discountAmount":null,"total":1558.78}
+        """;
+
     public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         var list = messages.ToList();

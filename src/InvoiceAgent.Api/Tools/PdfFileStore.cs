@@ -29,6 +29,13 @@ public sealed partial class PdfFileStore(string rootPath)
         return File.Exists(path) ? path : throw new FileNotFoundException($"Unknown fileId '{fileId}'.");
     }
 
+    /// <summary>Removes an upload that produced no stored result (rejected file, provider outage).</summary>
+    public void Delete(string fileId)
+    {
+        if (FileIdFormat().IsMatch(fileId))
+            File.Delete(PathFor(fileId));
+    }
+
     private string PathFor(string fileId) => Path.Combine(_root, fileId + ".pdf");
 
     [GeneratedRegex("^f[0-9a-f]{12}$")]

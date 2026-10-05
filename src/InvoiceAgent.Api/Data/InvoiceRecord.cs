@@ -1,4 +1,4 @@
-using InvoiceAgent.Api.Agents;
+using InvoiceAgent.Api.Models;
 
 namespace InvoiceAgent.Api.Data;
 

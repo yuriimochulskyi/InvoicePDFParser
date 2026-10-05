@@ -5,8 +5,6 @@ using InvoiceAgent.Api.Tools;
 
 namespace InvoiceAgent.Api.Agents;
 
-public enum InvoiceStatus { Parsed, NeedsReview }
-
 /// <summary>Decides the final status in code. The model's own opinion is never consulted.</summary>
 public static partial class InvoiceReviewPolicy
 {

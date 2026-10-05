@@ -193,8 +193,7 @@ public class ExtractionEvals
     /// <summary>Short hash of the system prompt, so a report can be matched to the prompt that produced it.</summary>
     private static string PromptId()
     {
-        var rules = typeof(InvoiceExtractionAgent).GetField("Rules", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.GetValue(null) as string;
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(InvoiceExtractionAgent.SystemInstructions + rules)))[..8];
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(InvoiceExtractionAgent.Instructions)))[..8];
     }
 
     private static string GitShortHash()

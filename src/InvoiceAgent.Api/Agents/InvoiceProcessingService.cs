@@ -35,10 +35,20 @@ public sealed class InvoiceProcessingService(
 
         // Decide in code whether this document is worth a model call at all.
         var sw = Stopwatch.StartNew();
-        var preflight = DocumentPreflight.Check(textSource.Extract(fileId), options.MaxDocumentChars);
-        var run = preflight.Ok
-            ? await agent.RunAsync(fileId, ct)
-            : new ExtractionRun(null, preflight.Document.Text, null, model.Provider, model.Model, 0, 0, sw.ElapsedMilliseconds, [], preflight.ReviewReason);
+        ExtractionRun run;
+        try
+        {
+            var preflight = DocumentPreflight.Check(textSource.Extract(fileId), options.MaxDocumentChars);
+            run = preflight.Ok
+                ? await agent.RunAsync(fileId, ct)
+                : new ExtractionRun(null, preflight.Document.Text, null, model.Provider, model.Model, 0, 0, sw.ElapsedMilliseconds, [], preflight.ReviewReason);
+        }
+        catch
+        {
+            // No record will reference this upload (rejected file, provider outage, cancellation): do not keep it.
+            store.Delete(fileId);
+            throw;
+        }
 
         var (status, reason) = InvoiceReviewPolicy.Decide(run);
 

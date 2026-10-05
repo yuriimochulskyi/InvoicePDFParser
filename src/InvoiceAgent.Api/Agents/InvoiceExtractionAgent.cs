@@ -49,6 +49,9 @@ public sealed class InvoiceExtractionAgent(
           Never change numbers just to make the check pass: if the document itself does not add up, keep its values.
         """;
 
+    /// <summary>The full system prompt; evals hash it so a report can be tied to the prompt that produced it.</summary>
+    public static string Instructions => SystemInstructions + Rules;
+
     public async Task<ExtractionRun> RunAsync(string fileId, CancellationToken ct = default)
     {
         var callerCt = ct;
@@ -63,7 +66,7 @@ public sealed class InvoiceExtractionAgent(
             UseProvidedChatClientAsIs = true,
             ChatOptions = new ChatOptions
             {
-                Instructions = SystemInstructions + Rules,
+                Instructions = Instructions,
                 Tools = tools.AsAITools(),
                 // Per-provider data, not code: reasoning models reject temperature, qwen3 needs reasoning off.
                 Temperature = options.Generation.Temperature,

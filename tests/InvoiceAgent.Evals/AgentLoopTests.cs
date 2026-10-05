@@ -1,4 +1,5 @@
 using InvoiceAgent.Api.Agents;
+using InvoiceAgent.Api.Models;
 using InvoiceAgent.Api.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,21 +35,12 @@ public class AgentLoopTests
         return (run, client, new(status, reason));
     }
 
-    private const string DeInvoiceJson = """
-        {"vendorName":"Müller Webdesign GmbH","vendorTaxId":"DE287654321","invoiceNumber":"RE-2026-0147",
-         "invoiceDate":"2026-08-15","dueDate":"2026-09-14","currency":"EUR",
-         "lineItems":[{"description":"Webentwicklung (Stunden)","quantity":12,"unitPrice":85.00,"amount":1020.00},
-                      {"description":"Hosting-Paket Business (12 Monate)","quantity":1,"unitPrice":240.00,"amount":240.00},
-                      {"description":"SSL-Zertifikat","quantity":1,"unitPrice":49.90,"amount":49.90}],
-         "subtotal":1309.90,"taxAmount":248.88,"discountAmount":null,"total":1558.78}
-        """;
-
     [Fact]
     public async Task HappyPath_ToolTurnThenSchemaTurn()
     {
         var (run, client, decision) = await RunAsync(
             // turn 1: the "model" reads the PDF, checks the numbers, says done
-            (messages, _) => ScriptedChatClient.ToolCall("ExtractPdfText", new { fileId = FileIdFrom(messages) })(messages, null),
+            ScriptedChatClient.ReadPdf,
             ScriptedChatClient.ToolCall("ValidateTotals", new
             {
                 lineItems = new[] { new { quantity = 12, unitPrice = 85.00, amount = 1020.00 }, new { quantity = 1, unitPrice = 240.00, amount = 240.00 }, new { quantity = 1, unitPrice = 49.90, amount = 49.90 } },
@@ -59,7 +51,7 @@ public class AgentLoopTests
             }),
             ScriptedChatClient.Text("done"),
             // turn 2: formatting
-            ScriptedChatClient.Text(DeInvoiceJson));
+            ScriptedChatClient.Text(ScriptedChatClient.GermanInvoiceJson));
 
         Assert.Null(run.Error);
         Assert.Equal(["ExtractPdfText", "ValidateTotals"], run.ToolCalls);
@@ -90,7 +82,7 @@ public class AgentLoopTests
     public async Task ModelReturnsNoJson_IsNeedsReview_Not503()
     {
         var (run, _, decision) = await RunAsync(
-            (messages, _) => ScriptedChatClient.ToolCall("ExtractPdfText", new { fileId = FileIdFrom(messages) })(messages, null),
+            ScriptedChatClient.ReadPdf,
             ScriptedChatClient.Text("done"),
             ScriptedChatClient.Text("Sorry, I cannot do that."));
 
@@ -105,7 +97,7 @@ public class AgentLoopTests
     {
         var (run, _, decision) = await RunAsync(
             ScriptedChatClient.Text("done"),
-            ScriptedChatClient.Text(DeInvoiceJson));
+            ScriptedChatClient.Text(ScriptedChatClient.GermanInvoiceJson));
 
         Assert.NotNull(run.Invoice);
         Assert.Empty(run.ToolCalls);
@@ -133,20 +125,13 @@ public class AgentLoopTests
         Func<IReadOnlyList<ChatMessage>, ChatOptions?, ChatMessage> callWhileAllowed = (messages, options) =>
             options?.Tools is { Count: > 0 } && options.ToolMode is not NoneChatToolMode
                 ? call(messages, options)
-                : ScriptedChatClient.Text(DeInvoiceJson)(messages, options);
+                : ScriptedChatClient.Text(ScriptedChatClient.GermanInvoiceJson)(messages, options);
 
         var (run, client, decision) = await RunAsync([.. Enumerable.Repeat(callWhileAllowed, 22)]);
 
         Assert.InRange(run.ToolCalls.Count, 1, ServiceCollectionExtensions.MaxToolIterations);
         Assert.True(client.Requests.Count <= ServiceCollectionExtensions.MaxToolIterations + 2, $"{client.Requests.Count} model calls");
         Assert.Equal(InvoiceStatus.NeedsReview, decision.Status);
-    }
-
-    private static string FileIdFrom(IReadOnlyList<ChatMessage> messages)
-    {
-        var text = messages.Last(m => m.Role == ChatRole.User).Text;
-        var start = text.IndexOf('"') + 1;
-        return text[start..text.IndexOf('"', start)];
     }
 
     public sealed record InvoiceReviewPolicyResult(InvoiceStatus Status, string? Reason);

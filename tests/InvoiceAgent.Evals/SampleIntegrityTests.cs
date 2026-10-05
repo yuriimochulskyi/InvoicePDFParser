@@ -1,4 +1,5 @@
 using InvoiceAgent.Api.Agents;
+using InvoiceAgent.Api.Models;
 using InvoiceAgent.Api.Tools;
 using UglyToad.PdfPig;
 
