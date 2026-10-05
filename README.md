@@ -47,25 +47,25 @@ What the project demonstrates:
 
 ```mermaid
 flowchart LR
-    Client -->|POST /api/invoices<br/>multipart PDF| API[InvoicesController<br/>400 / 413 / 503 as ProblemDetails]
-    API --> Svc[InvoiceProcessingService]
-    Svc -->|save| Store[(uploads/)]
-    Svc --> Text[IPdfTextSource<br/>PdfPig text layer,<br/>OCR fallback for scans]
-    Text --> Pre[DocumentPreflight<br/>any text? length?]
-    Pre -->|scan / too long| Policy
-    Pre --> Agent[ChatClientAgent<br/>over IChatClient pipeline<br/>FunctionInvokingChatClient, cap 8]
+    Client -->|"POST /api/invoices (multipart PDF)"| API["InvoicesController<br/>400, 413, 503 as ProblemDetails"]
+    API --> Svc["InvoiceProcessingService"]
+    Svc -->|save| Store[("uploads/")]
+    Svc --> Text["IPdfTextSource<br/>PdfPig text layer,<br/>OCR fallback for scans"]
+    Text -->|read| Store
+    Text --> Pre["DocumentPreflight<br/>any text? too long?"]
+    Pre -->|"no text or too long"| Policy
+    Pre -->|document text| Agent["ChatClientAgent<br/>over the IChatClient pipeline<br/>tool loop capped at 8 iterations"]
 
-    subgraph Agent loop
-        Agent -->|tool call| T1[ExtractPdfText<br/>PdfPig, columns as ' | ']
-        Agent -->|tool call| T2[ValidateTotals<br/>C# arithmetic]
-        T1 --> Store
+    subgraph loop["Agent loop"]
+        Agent -->|tool call| T1["ExtractPdfText<br/>returns the text,<br/>table columns separated"]
+        Agent -->|tool call| T2["ValidateTotals<br/>arithmetic in code"]
     end
 
-    Agent <-->|OpenAI Chat Completions| LLM{{Ollama qwen3:8b<br/>or Azure OpenAI deployment}}
-    Agent -->|InvoiceDto| Policy[InvoiceReviewPolicy<br/>deterministic]
-    Policy -->|Parsed / NeedsReview + reason| Svc
-    Svc --> DB[(SQLite)]
-    Svc -->|id, status, reviewReason, invoice| Client
+    Agent <-->|"OpenAI Chat Completions"| LLM{{"Ollama qwen3:8b<br/>or an Azure deployment"}}
+    Agent -->|InvoiceDto| Policy["InvoiceReviewPolicy<br/>deterministic"]
+    Policy -->|"Parsed or NeedsReview, with reason"| Svc
+    Svc --> DB[("SQLite")]
+    Svc -->|"id, status, reviewReason, invoice"| Client
 ```
 
 The API and the evals register the pipeline through the same `AddInvoiceAgent()` call, so the eval measures exactly
