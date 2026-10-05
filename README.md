@@ -12,14 +12,15 @@ checks its own arithmetic through tools, and code decides the outcome. The same 
 
 ## Results at a glance
 
-Nine sample invoices in six languages, including three adversarial ones (tampered total, hidden prompt injection,
-image-only scan). Every model, same pipeline, same samples. Full report: [docs/evals/2026-10-04-model-comparison.md](docs/evals/2026-10-04-model-comparison.md).
+Nine sample invoices in six languages, including three hard ones: a tampered total, a hidden prompt injection and
+an image-only scan that is read through OCR. Every model, same pipeline, same samples. Full report:
+[docs/evals/2026-10-05-model-comparison.md](docs/evals/2026-10-05-model-comparison.md).
 
 | Model | Field accuracy (clean) | Statuses correct | Decision safety | Median latency | Cost / 1,000 invoices |
 |---|---|---|---|---|---|
-| `qwen3:8b` on Ollama (RTX 3060 Ti) | 96/97 = 99.0% | 9/9 | ok | 15.0 s | $0 (local) |
-| `gpt-4.1-mini` on Azure OpenAI | 96/97 = 99.0% | 9/9 | ok | 4.0 s | $2.02 |
-| `gpt-5-mini` on Azure OpenAI, reasoning low | 96/97 = 99.0% | 9/9 | ok | 8.3 s | $2.51 |
+| `qwen3:8b` on Ollama (RTX 3060 Ti) | 96/97 = 99.0% | 9/9 | ok | 21.1 s | $0 (local) |
+| `gpt-4.1-mini` on Azure OpenAI | 96/97 = 99.0% | 9/9 | ok | 4.2 s | $2.34 |
+| `gpt-5-mini` on Azure OpenAI, reasoning low | 96/97 = 99.0% | 9/9 | ok | 8.8 s | $2.94 |
 
 The accuracy is the same on all three. What differs is speed and price, which says that the extraction quality
 comes from the pipeline around the model (column-aware text, self-check tool, deterministic review) rather than from
@@ -30,7 +31,8 @@ What the project demonstrates:
 - **Agent with typed tools** on Microsoft Agent Framework: the model reads the PDF and checks its own arithmetic through tools.
 - **Structured output:** the final answer is constrained to the `InvoiceDto` JSON schema.
 - **Code decides, not the model:** a deterministic review policy (arithmetic, required fields, ISO formats, grounding of every amount in the document text) sets the status.
-- **Adversarial evals:** a tampered total must end in `NeedsReview`; a prompt-injection paragraph must not change the result; a scan must be stopped before the model.
+- **Adversarial evals:** a tampered total must end in `NeedsReview`; a prompt-injection paragraph must not change the result.
+- **Scanned PDFs:** when a PDF has no text layer, Azure AI Document Intelligence recognises it and the same pipeline runs on the recognised text; without OCR configured the scan goes to review before any model call.
 - **One code path for Ollama and Azure OpenAI**, with per-model sampling settings as configuration.
 - **Agent tests without a model:** a scripted `IChatClient` drives the real tool loop, tools and PDF in CI, no GPU needed.
 - **Observability:** provider, model, tokens, latency, tool calls and decision are logged and stored for every run.
@@ -42,7 +44,8 @@ flowchart LR
     Client -->|POST /api/invoices<br/>multipart PDF| API[InvoicesController<br/>400 / 413 / 503 as ProblemDetails]
     API --> Svc[InvoiceProcessingService]
     Svc -->|save| Store[(uploads/)]
-    Svc --> Pre[DocumentPreflight<br/>text layer? length?]
+    Svc --> Text[IPdfTextSource<br/>PdfPig text layer,<br/>OCR fallback for scans]
+    Text --> Pre[DocumentPreflight<br/>any text? length?]
     Pre -->|scan / too long| Policy
     Pre --> Agent[ChatClientAgent<br/>over IChatClient pipeline<br/>FunctionInvokingChatClient, cap 8]
 
@@ -65,10 +68,10 @@ the production code path.
 | Folder | Contents |
 |---|---|
 | `src/InvoiceAgent.Api/Agents` | agent, provider factory, options, review policy, processing pipeline, DI registration |
-| `src/InvoiceAgent.Api/Tools` | PDF store, text extraction (`IPdfTextSource`), preflight, `ValidateTotals`, amount grounding |
+| `src/InvoiceAgent.Api/Tools` | PDF store, text extraction and OCR fallback (`IPdfTextSource`), shared text layout, preflight, `ValidateTotals`, amount grounding |
 | `src/InvoiceAgent.Api/Models` | `InvoiceDto` (its `[Description]`s become the JSON schema) |
 | `src/InvoiceAgent.Api/Data` | EF Core + SQLite |
-| `tests/InvoiceAgent.Evals` | 72 deterministic tests (policy, samples, agent loop, HTTP), the live-model eval, `evals.json` |
+| `tests/InvoiceAgent.Evals` | 79 deterministic tests (policy, samples, agent loop, OCR fallback, HTTP), the live-model eval, `evals.json` |
 | `samples/invoices` | 9 PDFs, their HTML sources, `*.expected.json` with the expected status |
 | `docs/evals` | committed eval reports |
 
@@ -145,7 +148,7 @@ Settings that mattered, each found by running the pipeline:
 | `Temperature = 0` where the model accepts it | At default temperature one run dropped two digits from a VAT ID. Reasoning deployments (`gpt-5-mini`) reject the parameter, so it is per-provider configuration (`Ai:AzureOpenAI:Temperature: null`). |
 | Typed numeric parameters on `ValidateTotals` | The first version took an `invoiceJson` string. The model sent `"27" IPS Monitor"` unescaped three times in a row and invented field names (`qty`, `net`). A typed signature gives the tool call its own JSON schema and has no strings to break. |
 | Column-aware text extraction | Plain PdfPig text turned a row into `1 8 500,00 8 500,00`. Is that 1 × 8 500 or 18 × 500? The model read unitPrice 500. |
-| Short `fileId`s, validated by regex | The model once mistyped a 32-character GUID. The id comes from the LLM, so it is never used as a raw path. |
+| Short `fileId`s, compared not resolved | The model once mistyped a 32-character GUID. The id comes back from the LLM, so the tool only compares it with the id of the run's document; it never becomes a path. |
 | `MaxOutputTokens`, run timeout, iteration cap, 3-check budget | A small model can loop or run away; each case ends as `NeedsReview` with a reason instead of hanging. |
 
 ## Why validation is deterministic code, not the LLM
@@ -202,10 +205,35 @@ not flag it. The real defence for strings is a vendor master and human review (s
 | `500` (ProblemDetails) | a configuration error such as a parameter the deployment rejects, or a bug; it looks like one |
 | `NeedsReview` inside `201` | a problem with the document or the model's reading, never with the infrastructure |
 
-`DocumentPreflight` runs before the model: a PDF without a text layer (a scan) becomes `NeedsReview` with
-`no text layer … OCR is not configured` in 0.8 s and zero tokens; a document longer than `Ai:MaxDocumentChars`
-becomes `NeedsReview` instead of being silently truncated by the model's context window. Sample
-`09-de-rechnung-scan.pdf` is the German invoice rendered as an image.
+`DocumentPreflight` runs before the model. A document longer than `Ai:MaxDocumentChars` becomes `NeedsReview`
+instead of being silently truncated by the model's context window. A document with no text at all becomes
+`NeedsReview` with `no text layer … OCR is not configured` (or `OCR failed (…)`) in under a second and zero tokens.
+
+## Scanned PDFs
+
+`IPdfTextSource` is the one place the document text comes from. `OcrFallbackTextSource` reads the PDF's text layer
+with PdfPig and, only when there is none and an engine is configured, sends the file to **Azure AI Document
+Intelligence** (`prebuilt-read`). The recognised words go through the same `TextLayout` as text-layer words: rows are
+rebuilt, columns are separated with ` | `, and the page rotation the service reports is undone first, so a scan that
+went in slightly crooked still yields table rows. The agent, the tools, grounding and the review policy do not know
+whether the text was read or recognised.
+
+```powershell
+dotnet user-secrets set "Ai:DocumentIntelligence:Endpoint" "https://<resource>.cognitiveservices.azure.com/"
+dotnet user-secrets set "Ai:DocumentIntelligence:ApiKey" "<key>"
+```
+
+Sample `09-de-rechnung-scan.pdf` is the German invoice rendered to a bitmap, rotated 0.6° and greyed. With OCR all
+three models return `Parsed` with 14/14 fields; without it the expected outcome is `NeedsReview`, and both are
+asserted. Two honest observations from the live run:
+
+- OCR is not perfect: the quantity `1` in two table rows was recognised as a dash. In the run inspected by hand
+  (`gpt-4.1-mini`) the model returned `quantity: null` for the row where nothing readable was left rather than
+  guessing; amounts, totals and all scored fields were right, and grounding ran against the recognised text.
+- An OCR outage or quota error does not fail the request: the document goes to review with the reason.
+
+OCR is billed per page by the service (the free tier covers 500 pages a month) and is not part of the token costs
+below.
 
 ## Switching providers
 
@@ -246,13 +274,13 @@ the list of problems instead of failing the first upload.
 
 ```powershell
 dotnet test                                   # everything; the live eval skips itself without a model
-dotnet test --filter "Category!=Eval"         # what CI runs: 72 deterministic tests, about two seconds
+dotnet test --filter "Category!=Eval"         # what CI runs: 79 deterministic tests, about two seconds
 dotnet test --filter "Category=Eval"          # live models from evals.json; EVAL_MODELS=gpt-5-mini for a subset
 ```
 
 Four levels:
 
-1. **Deterministic tests** (`ReviewPolicyTests`, `SampleIntegrityTests`): the review policy, totals, grounding in several locales, the preflight, and the integrity of every `expected.json` (its arithmetic, its identifiers in the PDF text, and that the policy over the ground truth yields the expected status).
+1. **Deterministic tests** (`ReviewPolicyTests`, `SampleIntegrityTests`): the review policy, totals, grounding in several locales, the preflight, the OCR fallback with a fake engine (including an OCR failure and a crooked scan), and the integrity of every `expected.json` (its arithmetic, its identifiers in the PDF text, and that the policy over the ground truth yields the expected status).
 2. **Agent-loop tests without a model** (`AgentLoopTests`): a `ScriptedChatClient` plays the LLM; the function-invocation loop, both tools, the real PDF and the policy are real. They pin the two-turn contract (tools and no schema first, schema and `ToolMode.None` last), usage aggregation, "no JSON → NeedsReview, not 503", "transport failure → 503", "never read the PDF → NeedsReview" and the iteration cap on a model that keeps calling tools.
 3. **HTTP tests** (`ApiTests`): the real ASP.NET Core pipeline through `WebApplicationFactory`, with the scripted client and in-memory SQLite. They pin 201 + `Location`, the response shape, `application/problem+json` for 400/404/503, "scan → NeedsReview with zero tokens", "503 stores nothing" and the typed contract in Swagger. Their first run caught a real defect: a class-level `[Produces("application/json")]` was overriding the ProblemDetails content type.
 4. **Live eval** (`ExtractionEvals`): every PDF through the real pipeline for every model in `tests/InvoiceAgent.Evals/evals.json`, scored against `expected.json`. It writes `TestResults/eval-report.md`; snapshots are committed under `docs/evals/`.
@@ -267,7 +295,7 @@ match, then each line amount. Gates, per model:
 Samples: `01` Ukrainian ФОП (ЄДРПОУ, UAH, ПДВ 20%, textual date), `02` German Rechnung (`1.558,78 €`, MwSt 19%),
 `03` US (Bill To / Ship To, sales tax 8.875%), `04` UK, two pages, 18 lines, carried-forward subtotal, `05` Polish
 with a 5% discount and courier shipping, `06` Swiss receipt with only a total, `07` = `02` with a tampered total,
-`08` = `03` with the hidden injection, `09` = `02` as an image-only scan. `samples/build-pdfs.ps1` renders new HTML
+`08` = `03` with the hidden injection, `09` = `02` as an image-only scan (see [Scanned PDFs](#scanned-pdfs)). `samples/build-pdfs.ps1` renders new HTML
 samples with headless Edge; existing PDFs are not re-rendered, so the baseline stays fixed.
 
 Honest notes on the numbers: the one miss (`01-ua-fop`, `vendorTaxId`) is a genuine ambiguity, since a VAT-paying
@@ -278,26 +306,26 @@ code changes in the tables above, not by prompt tweaks.
 
 ## Model comparison and cost
 
-From [docs/evals/2026-10-04-model-comparison.md](docs/evals/2026-10-04-model-comparison.md), one run per model on
-the same nine samples:
+From [docs/evals/2026-10-05-model-comparison.md](docs/evals/2026-10-05-model-comparison.md), one run per model on
+the same nine samples, OCR enabled:
 
 | Model | Sampling | Field accuracy | Statuses | Median latency | Tokens in / out per invoice | Cost / invoice | Cost / 1,000 |
 |---|---|---|---|---|---|---|---|
-| `qwen3:8b` (Ollama, RTX 3060 Ti 8 GB) | T=0, reasoning off | 99.0% | 9/9 | 15.0 s | 5482 / 530 | $0 | $0 |
-| `gpt-4.1-mini` (Azure, Global Standard) | T=0 | 99.0% | 9/9 | 4.0 s | 3833 / 303 | $0.0020 | $2.02 |
-| `gpt-5-mini` (Azure, Global Standard) | reasoning low | 99.0% | 9/9 | 8.3 s | 4160 / 733 | $0.0025 | $2.51 |
+| `qwen3:8b` (Ollama, RTX 3060 Ti 8 GB) | T=0, reasoning off | 99.0% | 9/9 | 21.1 s | 7443 / 594 | $0 | $0 |
+| `gpt-4.1-mini` (Azure, Global Standard) | T=0 | 99.0% | 9/9 | 4.2 s | 4449 / 348 | $0.0023 | $2.34 |
+| `gpt-5-mini` (Azure, Global Standard) | reasoning low | 99.0% | 9/9 | 8.8 s | 4662 / 889 | $0.0029 | $2.94 |
 
 How it is computed: `cost = input tokens × input price + output tokens × output price`, with the token counts the
 pipeline records for every run (summed over all model calls of an invoice, including each tool round) and the list
 prices in `evals.json` (USD per 1M tokens, Azure Global, 2026-10-04: `gpt-4.1-mini` $0.40 / $1.60, `gpt-5-mini`
-$0.25 / $2.00). Per-invoice figures are averages over the eight samples that reach a model; the scan costs nothing.
+$0.25 / $2.00). Per-invoice figures are averages over all nine samples; OCR for the scan is billed separately per page.
 
 Reading the table:
 
 - Same accuracy on all three. The pipeline, not the model, carries the quality here.
 - `gpt-4.1-mini` is the fastest and the cheapest per invoice.
-- `gpt-5-mini` spends about 2.4× the output tokens on reasoning for the same result; for extraction, reasoning does not pay.
-- The local model costs nothing per token and is 2–4× slower than the cloud; its median varied between 7 s and 15 s across runs on the same GPU. It is the option when documents may not leave the machine.
+- `gpt-5-mini` spends about 2.5× the output tokens on reasoning for the same result; for extraction, reasoning does not pay.
+- The local model costs nothing per token and is 2–5× slower than the cloud; its median varied between 7 s and 21 s across runs on the same GPU. It is the option when documents may not leave the machine.
 - About half the input tokens are the conversation history re-sent on each tool round; prompt caching or a single-turn design would cut the cloud cost further.
 
 Caveats: tokenisers differ, so token counts are not comparable across models, only cost is; cached-input discounts
@@ -328,7 +356,7 @@ commit history records each change with its reason.
 
 Deliberately out of scope for a weekend, each with its intended design:
 
-- **Scanned PDFs:** `AzureDocumentIntelligenceTextSource` implementing `IPdfTextSource` (`prebuilt-layout`, lines and tables joined with ` | `); the agent and the policy do not change.
+- **OCR quality:** `prebuilt-layout` for real table structure instead of rebuilt rows, per-word confidence as a review signal, a local engine behind `IOcrEngine` for documents that may not leave the machine.
 - **Async processing:** `202 Accepted` + `Location`, statuses `Queued → Processing → Parsed/NeedsReview/Failed`; first an in-process `Channel<Guid>` + `BackgroundService`, then RabbitMQ (MassTransit) or Azure Service Bus with the same handler; idempotency by content hash.
 - **Human review:** `PUT /api/invoices/{id}/review` with the corrected `InvoiceDto`, reviewer and note; status `Reviewed`; accepted corrections become new `expected.json` cases.
 - **Escalation:** on `NeedsReview` caused by a model error (ungrounded amount, bad format) retry with a stronger deployment; not for document limitations (receipt, scan).

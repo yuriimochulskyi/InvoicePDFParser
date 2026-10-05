@@ -161,7 +161,7 @@ public class ExtractionEvals
             sb.AppendLine(inv, $"| {m.Key} | {sampling} | {r.Clean.Sum(x => x.Score.Correct)}/{r.Clean.Sum(x => x.Score.Total)} = {r.FieldAccuracy:P1} | {r.Rows.Count(x => x.StatusCorrect)}/{r.Rows.Count} | {safety} | {median:0.0} s | {inPer}/{outPer} | {(cost is { } c ? "$" + c.ToString("0.0000", inv) : "n/a")} | {(cost is { } c2 ? "$" + (c2 * 1000).ToString("0.00", inv) : "n/a")} |");
         }
         sb.AppendLine();
-        sb.AppendLine("Per-invoice tokens and cost are averages over the samples that reached the model (the scan is stopped by the preflight at zero cost). Tokenisers differ between models, so token counts are not directly comparable; cost is.");
+        sb.AppendLine("Per-invoice tokens and cost are averages over the samples that reached the model (without OCR the scan is stopped by the preflight at zero cost). OCR itself is billed separately per page and is not included. Tokenisers differ between models, so token counts are not directly comparable; cost is.");
         foreach (var r in results.Where(x => x.Model.PricingNote is not null))
             sb.AppendLine(inv, $"- {r.Model.Key}: {r.Model.PricingNote}");
         sb.AppendLine();
