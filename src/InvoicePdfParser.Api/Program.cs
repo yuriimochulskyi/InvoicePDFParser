@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using InvoicePdfParser.Api.Configuration;
 using InvoicePdfParser.Api.Data;
+using InvoicePdfParser.Api.Rag;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -14,6 +15,9 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 var aiOptions = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new();
 builder.Services.AddInvoiceParser(aiOptions, Path.Combine(builder.Environment.ContentRootPath, "uploads"));
 builder.Services.AddDbContext<InvoiceDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("Invoices")));
+
+var ragOptions = builder.Configuration.GetSection(RagOptions.Section).Get<RagOptions>() ?? new();
+builder.Services.AddKnowledgeBase(ragOptions, builder.Environment.ContentRootPath);
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

@@ -80,10 +80,11 @@ the production code path.
 | `src/InvoicePdfParser.Api/Pipeline` | `InvoiceProcessingService`: store, preflight, agent, review, persist |
 | `src/InvoicePdfParser.Api/Configuration` | `AiOptions` with startup validation, `AddInvoiceParser()` registration |
 | `src/InvoicePdfParser.Api/Models` | `InvoiceDto` (its `[Description]`s become the JSON schema), the API contract |
+| `src/InvoicePdfParser.Api/Rag` | the RAG module: chunker, Ollama embeddings, in-memory vector index, `/api/ask` service |
 | `src/InvoicePdfParser.Api/Data`, `Controllers` | EF Core + SQLite; the HTTP endpoints |
-| `tests/InvoicePdfParser.Tests` | 79 deterministic tests (policy, samples, agent loop, OCR fallback, HTTP), the live-model eval, `evals.json` |
+| `tests/InvoicePdfParser.Tests` | 83 deterministic tests (policy, samples, agent loop, OCR fallback, HTTP, RAG), the live-model eval, `evals.json` |
 | `samples/invoices` | 9 PDFs, their HTML sources, `*.expected.json` with the expected status |
-| `docs/evals` | committed eval reports |
+| `docs` | the markdown knowledge base the RAG module indexes; `docs/evals` holds committed eval reports |
 
 ## Quick start
 
@@ -287,7 +288,7 @@ the list of problems instead of failing the first upload.
 
 ```powershell
 dotnet test                                   # everything; the live eval skips itself without a model
-dotnet test --filter "Category!=Eval"         # what CI runs: 79 deterministic tests, about two seconds
+dotnet test --filter "Category!=Eval"         # what CI runs: 83 deterministic tests, about two seconds
 dotnet test --filter "Category=Eval"          # live models from evals.json; EVAL_MODELS=gpt-5-mini for a subset
 ```
 
@@ -384,6 +385,68 @@ delimited as data; tools are the only side-effect boundary and `SendEmail` would
 (`ApprovalRequiredAIFunction`); the outcome (answer / escalate) is decided by code over a schema-constrained draft;
 evals with adversarial mails gate regressions; RAG over the policy and ticket base supplies grounded context; MCP
 exposes platform tools (CRM, order status) to the agent; idempotency by message id protects against redelivery.
+
+## RAG module
+
+A small retrieval-augmented endpoint over this repository's own documentation, built with the same `IChatClient`
+as the invoice agent and no vector framework: `POST /api/ask { "question": "..." }` returns an answer grounded in
+the markdown files, with the source file names and the chunks the answer was built from.
+
+How it works, in the order it runs (`src/InvoicePdfParser.Api/Rag`):
+
+1. **Index at startup.** A `BackgroundService` reads every `*.md` under `Rag:DocsPath` (default `docs/`) plus the
+   root `README.md`, splits each file into windows of 300 words with a 50-word overlap (`MarkdownChunker`), embeds
+   every window with `nomic-embed-text` through Ollama's `POST /api/embeddings`, and keeps `(file, text, float[])`
+   in memory (`VectorIndex`). Nothing is persisted; the index is rebuilt on every start. The log says how many
+   files and chunks were indexed and how long it took.
+2. **Retrieve.** The question is embedded the same way and compared to every chunk by cosine similarity, written
+   by hand in `VectorIndex.Cosine`; the top 3 chunks win.
+3. **Grounded prompt.** The system message is "Answer ONLY from the context below. If the answer is not in the
+   context, say you don't know. Cite the source file names." followed by the three chunks, each prefixed with its
+   `[source: file]`. The chat model and sampling settings are the ones configured in `Ai`, so the answer comes
+   from `qwen3:8b` locally or from the Azure deployment, whichever the invoice agent uses.
+4. **Answer.** `{ answer, sources, chunksUsed: [{ file, score, excerpt }] }`. The question, the three scores,
+   tokens and latency go to Serilog.
+
+Run it:
+
+```powershell
+ollama pull nomic-embed-text
+cd src/InvoicePdfParser.Api
+dotnet run
+curl -H "Content-Type: application/json" -d "{\"question\": \"How do I switch to Azure OpenAI?\"}" http://localhost:5185/api/ask
+# or use the Swagger UI at http://localhost:5185/swagger
+```
+
+Until the index is built, or if the embedding model is missing, `/api/ask` answers `503` with a `ProblemDetails`
+body and the startup log says what to pull. The invoice endpoints do not depend on it.
+
+Demo questions and what `qwen3:8b` answered on the indexed docs (7 files, 36 chunks, indexed in 17.5 s):
+
+| Question | Answer (abridged) | Sources | Top score |
+|---|---|---|---|
+| How does the parser decide an invoice needs review? | the six review rules, from the run error to the amount grounding, citing `docs/validation.md` | validation.md, README.md, roadmap.md | 0.77 |
+| How do I switch to Azure OpenAI? | the four `dotnet user-secrets set` commands; "the agent code does not need to change, only the configuration" | azure-setup.md, README.md | 0.76 |
+| What accuracy do the evals report? | "99.0% on clean samples for gpt-4.1-nano", citing README.md | evals.md, README.md | 0.75 |
+| What is the weather in Lviv? | "I don't know." | (scores fall to 0.47) | 0.47 |
+
+The third answer is correct but incomplete: the results table sits at the end of `docs/evals.md`, so the chunk that
+contains it ranked below the file's introduction and two README chunks. That is the retrieval, not the model, and
+it is the first item below.
+
+What I would improve, in order:
+
+- **Chunking by headings** instead of fixed windows, so a table stays with the section that introduces it, and a
+  chunk carries its heading path as context.
+- **Hybrid search:** BM25 over the same chunks next to the vectors, fused by reciprocal rank. Exact tokens such as
+  `Ai:Provider` or `gpt-4.1-nano` are where pure embeddings are weakest.
+- **Reranking** of the top 20 with a cross-encoder before picking the 3 that go to the model, and a minimum
+  similarity below which the endpoint says "I don't know" without calling the model at all.
+- **Retrieval evals:** a set of question → expected-source pairs scored for recall@k, the same way `evals.json`
+  gates the extraction, so a change of chunker or embedding model is measured, not eyeballed.
+- **Scale:** `Microsoft.Extensions.VectorData` as the store abstraction, with pgvector or Azure AI Search behind
+  it, and `IEmbeddingGenerator` in place of the hand-written Ollama client, so the index survives restarts and
+  the knowledge base can be larger than one repository.
 
 ## Roadmap
 

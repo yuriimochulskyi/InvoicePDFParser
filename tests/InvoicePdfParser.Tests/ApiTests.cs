@@ -38,6 +38,8 @@ public sealed class ApiTests : IDisposable
         var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            // No knowledge base in tests: an empty folder means the indexer never calls Ollama.
+            builder.UseSetting("Rag:DocsPath", _uploads);
             builder.ConfigureServices(services =>
             {
                 // Swap the three things that touch the outside world; keep the rest.
